@@ -65,7 +65,7 @@ type ErrorGeneratorOptions = {
   format: APIFormat | "unknown";
   title: string;
   message: string;
-  obj?: object;
+  obj?: Record<string, any>;
   reqId: string | number | object;
   model?: string;
   statusCode?: number;
@@ -95,6 +95,23 @@ export function tryInferFormat(body: any): APIFormat | "unknown" {
   return "unknown";
 }
 
+// avoid leaking upstream hostname on dns resolution error
+function redactHostname(options: ErrorGeneratorOptions): ErrorGeneratorOptions {
+  if (!options.message.includes("getaddrinfo")) return options;
+
+  const redacted = { ...options };
+  redacted.message = "Could not resolve hostname";
+
+  if (typeof redacted.obj?.error === "object") {
+    redacted.obj = {
+      ...redacted.obj,
+      error: { message: "Could not resolve hostname" },
+    };
+  }
+
+  return redacted;
+}
+
 export function sendErrorToClient({
   options,
   req,
@@ -104,27 +121,26 @@ export function sendErrorToClient({
   req: express.Request;
   res: express.Response;
 }) {
-  const { format: inputFormat } = options;
+  const redactedOpts = redactHostname(options);
+  const { format: inputFormat } = redactedOpts;
 
-  // This is an error thrown before we know the format of the request, so we
-  // can't send a response in the format the client expects.
   const format =
     inputFormat === "unknown" ? tryInferFormat(req.body) : inputFormat;
   if (format === "unknown") {
-    return res.status(options.statusCode || 400).json({
-      error: options.message,
-      details: options.obj,
+    return res.status(redactedOpts.statusCode || 400).json({
+      error: redactedOpts.message,
+      details: redactedOpts.obj,
     });
   }
 
-  const completion = buildSpoofedCompletion({ ...options, format });
-  const event = buildSpoofedSSE({ ...options, format });
+  const completion = buildSpoofedCompletion({ ...redactedOpts, format });
+  const event = buildSpoofedSSE({ ...redactedOpts, format });
   const isStreaming =
     req.isStreaming || req.body.stream === true || req.body.stream === "true";
 
   if (!res.headersSent) {
-    res.setHeader("x-oai-proxy-error", options.title);
-    res.setHeader("x-oai-proxy-error-status", options.statusCode || 500);
+    res.setHeader("x-oai-proxy-error", redactedOpts.title);
+    res.setHeader("x-oai-proxy-error-status", redactedOpts.statusCode || 500);
   }
 
   if (isStreaming) {

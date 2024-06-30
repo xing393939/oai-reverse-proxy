@@ -1,4 +1,5 @@
 /* This file is fucking horrendous, sorry */
+// TODO: extract all per-service error response handling into its own modules
 import { Request, Response } from "express";
 import * as http from "http";
 import { config } from "../../../config";
@@ -194,7 +195,7 @@ const handleUpstreamErrors: ProxyResHandlerWithBody = async (
     { statusCode, type: errorType, errorPayload, key: req.key?.hash },
     `Received error response from upstream. (${proxyRes.statusMessage})`
   );
-  
+
   // TODO: split upstream error handling into separate modules for each service,
   // this is out of control.
 
@@ -225,7 +226,7 @@ const handleUpstreamErrors: ProxyResHandlerWithBody = async (
         break;
       case "anthropic":
       case "aws":
-        await handleAnthropicBadRequestError(req, errorPayload);
+        await handleAnthropicAwsBadRequestError(req, errorPayload);
         break;
       default:
         assertNever(service);
@@ -247,7 +248,9 @@ const handleUpstreamErrors: ProxyResHandlerWithBody = async (
           );
           keyPool.update(req.key!, { allowsMultimodality: false });
           await reenqueueRequest(req);
-          throw new RetryableError("Claude request re-enqueued because key does not support multimodality.");
+          throw new RetryableError(
+            "Claude request re-enqueued because key does not support multimodality."
+          );
         } else {
           keyPool.disable(req.key!, "revoked");
           errorPayload.proxy_note = `Assigned API key is invalid or revoked, please try again.`;
@@ -347,7 +350,7 @@ const handleUpstreamErrors: ProxyResHandlerWithBody = async (
   throw new HttpError(statusCode, errorPayload.error?.message);
 };
 
-async function handleAnthropicBadRequestError(
+async function handleAnthropicAwsBadRequestError(
   req: Request,
   errorPayload: ProxiedErrorPayload
 ) {
@@ -382,11 +385,13 @@ async function handleAnthropicBadRequestError(
     return;
   }
 
-  const isDisabled = error?.message?.match(/organization has been disabled/i);
+  const isDisabled =
+    error?.message?.match(/organization has been disabled/i) ||
+    error?.message?.match(/^operation not allowed/i);
   if (isDisabled) {
     req.log.warn(
       { key: req.key?.hash, message: error?.message },
-      "Anthropic key has been disabled."
+      "Anthropic/AWS key has been disabled."
     );
     keyPool.disable(req.key!, "revoked");
     errorPayload.proxy_note = `Assigned key has been disabled. (${error?.message})`;
@@ -512,7 +517,7 @@ async function handleOpenAIRateLimitError(
     //   keyPool.markRateLimited(req.key!);
     //   break;
     default:
-      errorPayload.proxy_note = `This is likely a temporary error with OpenAI. Try again in a few seconds.`;
+      errorPayload.proxy_note = `This is likely a temporary error with the API. Try again in a few seconds.`;
       break;
   }
   return errorPayload;
