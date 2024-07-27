@@ -101,6 +101,10 @@
   <% ["nickname", "type", "disabledAt", "disabledReason", "maxIps", "adminNote"].forEach(function (key) { %>
   <input type="hidden" name="<%- key %>" value="<%- user[key] %>" />
   <% }); %>
+  <!-- tokenRefresh_ keys are dynamically generated -->
+  <% Object.entries(quota).forEach(([family]) => { %>
+  <input type="hidden" name="tokenRefresh_<%- family %>" value="<%- user.tokenRefresh[family] || quota[family] %>" />
+  <% }); %>
 </form>
 
 <h3>Quota Information</h3>
@@ -111,7 +115,7 @@
   <button type="submit" class="btn btn-primary">Refresh Quotas for User</button>
 </form>
 <% } %>
-<%- include("partials/shared_quota-info", { quota, user }) %>
+<%- include("partials/shared_quota-info", { quota, user, showRefreshEdit: true }) %>
 
 <p><a href="/admin/manage/list-users">Back to User List</a></p>
 
@@ -122,18 +126,25 @@
       const token = a.dataset.token;
       const field = a.dataset.field;
       const existingValue = document.querySelector(`#current-values input[name=${field}]`).value;
-      let value = prompt(`Enter new value for '${field}'':`, existingValue);
+
+      let value = prompt(`Enter new value for '${field}':`, existingValue);
       if (value !== null) {
         if (value === "") {
           value = null;
         }
+
+        const payload = { _csrf: document.querySelector("meta[name=csrf-token]").getAttribute("content") };
+        if (field.startsWith("tokenRefresh_")) {
+          const family = field.slice("tokenRefresh_".length);
+          payload.tokenRefresh = { [family]: Number(value) };
+        } else {
+          payload[field] = value;
+        }
+
         fetch(`/admin/manage/edit-user/${token}`, {
           method: "POST",
           credentials: "same-origin",
-          body: JSON.stringify({
-            [field]: value,
-            _csrf: document.querySelector("meta[name=csrf-token]").getAttribute("content"),
-          }),
+          body: JSON.stringify(payload),
           headers: { "Content-Type": "application/json", Accept: "application/json" },
         })
           .then((res) => Promise.all([res.ok, res.json()]))
@@ -141,9 +152,7 @@
             const url = new URL(window.location.href);
             const params = new URLSearchParams();
             if (!ok) {
-              params.set("flash", `error: ${json.error.message}`);
-            } else {
-              params.set("flash", `success: User's ${field} updated.`);
+              alert(`Failed to edit user: ${json.message}`);
             }
             url.search = params.toString();
             window.location.assign(url);

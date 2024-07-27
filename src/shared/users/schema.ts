@@ -37,6 +37,8 @@ export const UserSchema = z
     tokenCounts: tokenCountsSchema,
     /** Maximum number of tokens the user can consume, by model family. */
     tokenLimits: tokenCountsSchema,
+    /** User-specific token refresh amount, by model family. */
+    tokenRefresh: tokenCountsSchema,
     /** Time at which the user was created. */
     createdAt: z.number(),
     /** Time at which the user last connected. */

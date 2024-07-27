@@ -64,7 +64,7 @@
 </table>
 
 <h3>Quota Information</h3>
-<%- include("partials/shared_quota-info", { quota, user }) %>
+<%- include("partials/shared_quota-info", { quota, user, showRefreshEdit: false }) %>
 
 <form id="edit-nickname-form" style="display: none" action="/user/edit-nickname" method="post">
   <input type="hidden" name="_csrf" value="<%= csrfToken %>" />

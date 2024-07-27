@@ -129,7 +129,7 @@ also significantly reduce hash rates on mobile devices.
 - Intel Core i9-13900K (Chrome, in VM limited to 4 cores): 12.2 - 13.0 H/s
 - iPad Pro (M2) (Safari, 6 workers): 8.0 - 10 H/s
   - Thermal throttles early. 8 cores is normal concurrency, but unstable.
-- iPhone 13 Pro (Safari): 4.0 - 4.6 H/s
+- iPhone 15 Pro Max (Safari): 4.0 - 4.6 H/s
 - Samsung Galaxy S10e (Chrome): 3.6 - 3.8 H/s
   - This is a 2019 phone almost matching an iPhone five years newer because of
     bad Safari performance.

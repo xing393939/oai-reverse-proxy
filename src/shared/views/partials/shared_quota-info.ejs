@@ -1,4 +1,6 @@
-<p>Next refresh: <time><%- nextQuotaRefresh %></time></p>
+<p>
+  Next refresh: <time><%- nextQuotaRefresh %></time>
+</p>
 <table class="striped">
   <thead>
     <tr>
@@ -9,7 +11,7 @@
       <% } %>
       <th scope="col">Limit</th>
       <th scope="col">Remaining</th>
-      <th scope="col">Refresh Amount</th>
+      <th scope="col" colspan="<%= showRefreshEdit ? 2 : 1 %>">Refresh Amount</th>
     </tr>
   </thead>
   <tbody>
@@ -19,7 +21,7 @@
       <td><%- prettyTokens(user.tokenCounts[key]) %></td>
       <% if (showTokenCosts) { %>
       <td>$<%- tokenCost(key, user.tokenCounts[key]).toFixed(2) %></td>
-      <% } %>      
+      <% } %>
       <% if (!user.tokenLimits[key]) { %>
       <td colspan="2" style="text-align: center">unlimited</td>
       <% } else { %>
@@ -29,7 +31,20 @@
       <% if (user.type === "temporary") { %>
       <td>N/A</td>
       <% } else { %>
-      <td><%- prettyTokens(quota[key]) %></td>
+      <td><%- prettyTokens(user.tokenRefresh[key] || quota[key]) %></td>
+      <% } %>
+      <% if (showRefreshEdit) { %>
+      <td class="actions">
+        <a
+          title="Edit"
+          id="edit-refresh"
+          href="#"
+          data-field="tokenRefresh_<%= key %>"
+          data-token="<%= user.token %>"
+          data-modelFamily="<%= key %>"
+          >✏️</a
+        >
+      </td>
       <% } %>
     </tr>
     <% }) %>

@@ -33,7 +33,7 @@
       .pagination li a {
         display: block;
         padding: 0.5em 1em;
-          border-bottom: none;
+        border-bottom: none;
         text-decoration: none;
       }
       .pagination li.active a {
@@ -71,20 +71,24 @@
       td.actions:hover {
         background-color: #e0e6f6;
       }
+      tr > td,
+      tr > th {
+          border-right: 1px solid #dedede;
+      }
 
       @media (max-width: 800px) {
         body {
           padding: 0.5em;
         }
 
-          table.full-width {
-            width: 100%;
-            position: static;
-            left: auto;
-            right: auto;
-            margin-left: 0;
-            margin-right: 0;
-          }
+        table.full-width {
+          width: 100%;
+          position: static;
+          left: auto;
+          right: auto;
+          margin-left: 0;
+          margin-right: 0;
+        }
       }
 
       @media (prefers-color-scheme: dark) {
@@ -94,6 +98,13 @@
 
         th.active {
           background-color: #446;
+        }
+        td.actions:hover {
+          background-color: #446;
+        }
+        tr > td,
+        tr > th {
+          border-right: 1px solid #444;
         }
       }
     </style>
