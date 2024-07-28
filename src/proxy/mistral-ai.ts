@@ -22,27 +22,46 @@ import {
   ProxyResHandlerWithBody,
 } from "./middleware/response";
 
+// Mistral can't settle on a single naming scheme and deprecates models within
+// months of releasing them so this list is hard to keep up to date. 2024-07-28
 // https://docs.mistral.ai/platform/endpoints
 export const KNOWN_MISTRAL_AI_MODELS = [
-  // Mistral 7b (open weight, legacy)
+  /*
+  Mistral Nemo
+  "A 12B model built with the partnership with Nvidia.  It is easy to use and a
+  drop-in replacement in any system using Mistral 7B that it supersedes."
+  */
+  "open-mistral-nemo",
+  "open-mistral-nemo-2407",
+  /*
+  Mistral Large
+  "Our flagship model with state-of-the-art reasoning, knowledge, and coding
+  capabilities."
+  */
+  "mistral-large-latest",
+  "mistral-large-2407",
+  "mistral-large-2402", // deprecated
+  /*
+  Codestral
+  "A cutting-edge generative model that has been specifically designed and
+  optimized for code generation tasks, including fill-in-the-middle and code
+  completion."
+  note: this uses a separate bidi completion endpoint that is not implemented
+  */
+  "codestral-latest",
+  "codestral-2405",
+  /* So-called "Research Models" */
   "open-mistral-7b",
-  "mistral-tiny-2312",
-  // Mixtral 8x7b (open weight, legacy)
   "open-mixtral-8x7b",
-  "mistral-small-2312",
-  // Mixtral Small (newer 8x7b, closed weight)
+  "open-mistral-8x22b",
+  "open-codestral-mamba",
+  /* Deprecated production models */
   "mistral-small-latest",
   "mistral-small-2402",
-  // Mistral Medium
   "mistral-medium-latest",
   "mistral-medium-2312",
-  // Mistral Large
-  "mistral-large-latest",
-  "mistral-large-2402",
-  // Deprecated identifiers (2024-05-01)
   "mistral-tiny",
-  "mistral-small",
-  "mistral-medium",
+  "mistral-tiny-2312"
 ];
 
 let modelsCache: any = null;

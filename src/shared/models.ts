@@ -1,7 +1,6 @@
 // Don't import any other project files here as this is one of the first modules
 // loaded and it will cause circular imports.
 
-import pino from "pino";
 import type { Request } from "express";
 
 /**
@@ -26,10 +25,9 @@ export type OpenAIModelFamily =
 export type AnthropicModelFamily = "claude" | "claude-opus";
 export type GoogleAIModelFamily = "gemini-pro";
 export type MistralAIModelFamily =
-  | "mistral-tiny"
-  | "mistral-small"
-  | "mistral-medium"
-  | "mistral-large";
+  // mistral changes their model classes frequently so these no longer
+  // correspond to specific models. consider them rough pricing tiers.
+  "mistral-tiny" | "mistral-small" | "mistral-medium" | "mistral-large";
 export type AwsBedrockModelFamily = "aws-claude" | "aws-claude-opus";
 export type AzureOpenAIModelFamily = `azure-${OpenAIModelFamily}`;
 export type ModelFamily =
@@ -77,21 +75,6 @@ export const LLM_SERVICES = (<A extends readonly LLMService[]>(
   "azure",
 ] as const);
 
-export const OPENAI_MODEL_FAMILY_MAP: { [regex: string]: OpenAIModelFamily } = {
-  "^gpt-4o": "gpt4o",
-  "^gpt-4-turbo(-\\d{4}-\\d{2}-\\d{2})?$": "gpt4-turbo",
-  "^gpt-4-turbo(-preview)?$": "gpt4-turbo",
-  "^gpt-4-(0125|1106)(-preview)?$": "gpt4-turbo",
-  "^gpt-4(-\\d{4})?-vision(-preview)?$": "gpt4-turbo",
-  "^gpt-4-32k-\\d{4}$": "gpt4-32k",
-  "^gpt-4-32k$": "gpt4-32k",
-  "^gpt-4-\\d{4}$": "gpt4",
-  "^gpt-4$": "gpt4",
-  "^gpt-3.5-turbo": "turbo",
-  "^text-embedding-ada-002$": "turbo",
-  "^dall-e-\\d{1}$": "dall-e",
-};
-
 export const MODEL_FAMILY_SERVICE: {
   [f in ModelFamily]: LLMService;
 } = {
@@ -99,7 +82,7 @@ export const MODEL_FAMILY_SERVICE: {
   gpt4: "openai",
   "gpt4-turbo": "openai",
   "gpt4-32k": "openai",
-  "gpt4o": "openai",
+  gpt4o: "openai",
   "dall-e": "openai",
   claude: "anthropic",
   "claude-opus": "anthropic",
@@ -120,7 +103,21 @@ export const MODEL_FAMILY_SERVICE: {
 
 export const IMAGE_GEN_MODELS: ModelFamily[] = ["dall-e", "azure-dall-e"];
 
-pino({ level: "debug" }).child({ module: "startup" });
+export const OPENAI_MODEL_FAMILY_MAP: { [regex: string]: OpenAIModelFamily } = {
+  "^gpt-4o(-\\d{4}-\\d{2}-\\d{2})?$": "gpt4o",
+  "^gpt-4o-mini(-\\d{4}-\\d{2}-\\d{2})?$": "turbo", // closest match
+  "^gpt-4-turbo(-\\d{4}-\\d{2}-\\d{2})?$": "gpt4-turbo",
+  "^gpt-4-turbo(-preview)?$": "gpt4-turbo",
+  "^gpt-4-(0125|1106)(-preview)?$": "gpt4-turbo",
+  "^gpt-4(-\\d{4})?-vision(-preview)?$": "gpt4-turbo",
+  "^gpt-4-32k-\\d{4}$": "gpt4-32k",
+  "^gpt-4-32k$": "gpt4-32k",
+  "^gpt-4-\\d{4}$": "gpt4",
+  "^gpt-4$": "gpt4",
+  "^gpt-3.5-turbo": "turbo",
+  "^text-embedding-ada-002$": "turbo",
+  "^dall-e-\\d{1}$": "dall-e",
+};
 
 export function getOpenAIModelFamily(
   model: string,
@@ -151,10 +148,15 @@ export function getMistralAIModelFamily(model: string): MistralAIModelFamily {
       return prunedModel as MistralAIModelFamily;
     case "open-mistral-7b":
       return "mistral-tiny";
+    case "open-mistral-nemo":
     case "open-mixtral-8x7b":
+    case "codestral":
+    case "open-codestral-mamba":
       return "mistral-small";
+    case "open-mixtral-8x22b":
+      return "mistral-medium";
     default:
-      return "mistral-tiny";
+      return "mistral-small";
   }
 }
 

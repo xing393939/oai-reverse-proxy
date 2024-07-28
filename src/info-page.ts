@@ -12,7 +12,7 @@ import { checkCsrfToken, injectCsrfToken } from "./shared/inject-csrf";
 
 const INFO_PAGE_TTL = 2000;
 const MODEL_FAMILY_FRIENDLY_NAME: { [f in ModelFamily]: string } = {
-  turbo: "GPT-3.5 Turbo",
+  turbo: "GPT-4o Mini / 3.5 Turbo",
   gpt4: "GPT-4",
   "gpt4-32k": "GPT-4 32k",
   "gpt4-turbo": "GPT-4 Turbo",
@@ -22,7 +22,7 @@ const MODEL_FAMILY_FRIENDLY_NAME: { [f in ModelFamily]: string } = {
   "claude-opus": "Claude (Opus)",
   "gemini-pro": "Gemini Pro",
   "mistral-tiny": "Mistral 7B",
-  "mistral-small": "Mixtral Small", // Originally 8x7B, but that now refers to the older open-weight version. Mixtral Small is a newer closed-weight update to the 8x7B model.
+  "mistral-small": "Mistral Nemo",
   "mistral-medium": "Mistral Medium",
   "mistral-large": "Mistral Large",
   "aws-claude": "AWS Claude (Sonnet)",

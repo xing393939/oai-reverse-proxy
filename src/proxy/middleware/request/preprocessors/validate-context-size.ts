@@ -6,8 +6,9 @@ import { RequestPreprocessor } from "../index";
 
 const CLAUDE_MAX_CONTEXT = config.maxContextTokensAnthropic;
 const OPENAI_MAX_CONTEXT = config.maxContextTokensOpenAI;
-const GOOGLE_AI_MAX_CONTEXT = 32000;
-const MISTRAL_AI_MAX_CONTENT = 32768;
+// todo: make configurable
+const GOOGLE_AI_MAX_CONTEXT = 1024000;
+const MISTRAL_AI_MAX_CONTENT = 131072;
 
 /**
  * Assigns `req.promptTokens` and `req.outputTokens` based on the request body
@@ -81,16 +82,18 @@ export const validateContextSize: RequestPreprocessor = async (req) => {
   } else if (model.match(/^claude-3/)) {
     modelMax = 200000;
   } else if (model.match(/^gemini-\d{3}$/)) {
-    modelMax = GOOGLE_AI_MAX_CONTEXT;
-  } else if (model.match(/^mistral-(tiny|small|medium)$/)) {
-    modelMax = MISTRAL_AI_MAX_CONTENT;
+    modelMax = 1024000;
   } else if (model.match(/^anthropic\.claude-3/)) {
     modelMax = 200000;
   } else if (model.match(/^anthropic\.claude-v2:\d/)) {
     modelMax = 200000;
   } else if (model.match(/^anthropic\.claude/)) {
-    // Not sure if AWS Claude has the same context limit as Anthropic Claude.
     modelMax = 100000;
+  } else if (model.match(/tral/)) {
+    // catches mistral, mixtral, codestral, mathstral, etc. mistral models have
+    // no name convention and wildly different context windows so this is a
+    // catch-all
+    modelMax = MISTRAL_AI_MAX_CONTENT;
   } else {
     req.log.warn({ model }, "Unknown model, using 200k token limit.");
     modelMax = 200000;

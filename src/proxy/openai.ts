@@ -28,28 +28,41 @@ import {
 
 // https://platform.openai.com/docs/models/overview
 export const KNOWN_OPENAI_MODELS = [
+  // GPT4o
   "gpt-4o",
   "gpt-4o-2024-05-13",
-  "gpt-4-turbo", // alias for latest gpt4-turbo stable
+  // GPT4o Mini
+  "gpt-4o-mini",
+  "gpt-4o-mini-2024-07-18",
+  // GPT4 Turbo (superceded by GPT4o)
+  "gpt-4-turbo",
   "gpt-4-turbo-2024-04-09", // gpt4-turbo stable, with vision
   "gpt-4-turbo-preview", // alias for latest turbo preview
   "gpt-4-0125-preview", // gpt4-turbo preview 2
   "gpt-4-1106-preview", // gpt4-turbo preview 1
-  "gpt-4-vision-preview", // gpt4-turbo preview 1 with vision
+  // Launch GPT4
   "gpt-4",
   "gpt-4-0613",
-  "gpt-4-0314", // EOL 2024-06-13
-  "gpt-4-32k",
-  "gpt-4-32k-0314", // EOL 2024-06-13
-  "gpt-4-32k-0613",
+  "gpt-4-0314", // legacy
+  // GPT3.5 Turbo (superceded by GPT4o Mini)
   "gpt-3.5-turbo",
-  "gpt-3.5-turbo-0301", // EOL 2024-06-13
-  "gpt-3.5-turbo-0613",
-  "gpt-3.5-turbo-16k",
-  "gpt-3.5-turbo-16k-0613",
+  "gpt-3.5-turbo-0125", // latest turbo
+  "gpt-3.5-turbo-1106", // older turbo
+  // Text Completion
   "gpt-3.5-turbo-instruct",
   "gpt-3.5-turbo-instruct-0914",
+  // Embeddings
   "text-embedding-ada-002",
+  // Known deprecated models
+  "gpt-4-32k", // alias for 0613
+  "gpt-4-32k-0314", // EOL 2025-06-06
+  "gpt-4-32k-0613", // EOL 2025-06-06
+  "gpt-4-vision-preview", // EOL 2024-12-06
+  "gpt-4-1106-vision-preview", // EOL 2024-12-06
+  "gpt-3.5-turbo-0613", // EOL 2024-09-13
+  "gpt-3.5-turbo-0301", // not on the website anymore, maybe unavailable
+  "gpt-3.5-turbo-16k", // alias for 0613
+  "gpt-3.5-turbo-16k-0613", // EOL 2024-09-13
 ];
 
 let modelsCache: any = null;
