@@ -152,10 +152,15 @@ export function upsertUser(user: UserUpdate) {
       updates.tokenLimits[family] ??= 0;
     }
   }
+  // tokenRefresh is a special case where we want to merge the existing and
+  // updated values for each model family, ignoring falsy values.
   if (updates.tokenRefresh) {
+    const merged = { ...existing.tokenRefresh };
     for (const family of MODEL_FAMILIES) {
-      updates.tokenRefresh[family] ??= 0;
+      merged[family] =
+        updates.tokenRefresh[family] || existing.tokenRefresh[family];
     }
+    updates.tokenRefresh = merged;
   }
 
   users.set(user.token, Object.assign(existing, updates));
@@ -266,10 +271,9 @@ export function refreshQuota(token: string) {
   // Get default quotas for each model family.
   const defaultQuotas = Object.entries(tokenQuota) as [ModelFamily, number][];
   // If any user-specific refresh quotas are present, override default quotas.
-  const userQuotas = defaultQuotas.map(([f, q]) => [
-    f,
-    (tokenRefresh[f] ?? 0) || q,
-  ] as const /* narrow to tuple */);
+  const userQuotas = defaultQuotas.map(
+    ([f, q]) => [f, (tokenRefresh[f] ?? 0) || q] as const /* narrow to tuple */
+  );
 
   userQuotas
     // Ignore families with no global or user-specific refresh quota.

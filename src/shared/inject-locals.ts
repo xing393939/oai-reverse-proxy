@@ -7,8 +7,9 @@ import * as userStore from "./users/user-store";
 export const injectLocals: RequestHandler = (req, res, next) => {
   // config-related locals
   const quota = config.tokenQuota;
-  res.locals.quotasEnabled =
-    quota.turbo > 0 || quota.gpt4 > 0 || quota.claude > 0;
+  const sumOfQuotas = Object.values(quota).reduce((a, b) => a + b, 0);
+
+  res.locals.quotasEnabled = sumOfQuotas > 0;
   res.locals.quota = quota;
   res.locals.nextQuotaRefresh = userStore.getNextQuotaRefresh();
   res.locals.persistenceEnabled = config.gatekeeperStore !== "memory";
