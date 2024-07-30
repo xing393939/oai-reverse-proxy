@@ -303,6 +303,10 @@
       _csrf: document.querySelector("meta[name=csrf-token]").getAttribute("content"),
     };
 
+    if (localStorage.getItem("captcha-proxy-key")) {
+      body.proxyKey = localStorage.getItem("captcha-proxy-key");
+    }
+
     fetch("/user/captcha/verify", {
       method: "POST",
       credentials: "same-origin",

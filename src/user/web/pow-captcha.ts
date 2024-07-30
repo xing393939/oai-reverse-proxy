@@ -213,7 +213,7 @@ router.post("/challenge", (req, res) => {
   }
   const { action, refreshToken, proxyKey } = data.data;
   if (config.proxyKey && proxyKey !== config.proxyKey) {
-    res.status(400).json({ error: "Invalid proxy password" });
+    res.status(401).json({ error: "Invalid proxy password" });
     return;
   }
 

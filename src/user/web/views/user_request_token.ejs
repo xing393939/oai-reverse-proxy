@@ -61,7 +61,11 @@
     const refreshToken = token && action === "refresh" ? JSON.parse(token).token : undefined;
     const keyInput = document.getElementById("proxy-key");
     const proxyKey = (keyInput && keyInput.value) || undefined;
-    localStorage.setItem("captcha-proxy-key", proxyKey);
+    if (!proxyKey?.length) {
+      localStorage.removeItem("captcha-proxy-key");
+    } else {
+      localStorage.setItem("captcha-proxy-key", proxyKey);
+    }
 
     fetch("/user/captcha/challenge", {
       method: "POST",
