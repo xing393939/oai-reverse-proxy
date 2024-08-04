@@ -561,7 +561,7 @@ async function handleGoogleAIBadRequestError(
       errorPayload.proxy_note = `Assigned API key is invalid.`;
     }
   } else if (status === "FAILED_PRECONDITION") {
-    if (message.includes(/please enable billing/i)) {
+    if (message.match(/please enable billing/i)) {
       req.log.warn(
         { key: req.key?.hash, status, msg: error.message },
         "Cannot use key due to billing restrictions."

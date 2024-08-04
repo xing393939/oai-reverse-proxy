@@ -143,6 +143,8 @@ export function sendErrorToClient({
     res.setHeader("x-oai-proxy-error-status", redactedOpts.statusCode || 500);
   }
 
+  req.log.info({ statusCode: res.statusCode, isStreaming, format, redactedOpts, event }, "Sending error response");
+  
   if (isStreaming) {
     if (!res.headersSent) {
       initializeSseStream(res);
@@ -223,19 +225,16 @@ export function buildSpoofedCompletion({
       // TODO: Native Google AI non-streaming responses are not supported, this
       // is an untested guess at what the response should look like.
       return {
-        id: "error-" + id,
-        object: "chat.completion",
-        created: Date.now(),
-        model,
         candidates: [
           {
-            content: { parts: [{ text: content }], role: "model" },
+            content: { parts: [{ text: content }], role: "assistant" },
             finishReason: title,
             index: 0,
             tokenCount: null,
             safetyRatings: [],
           },
         ],
+        usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
       };
     case "openai-image":
       return obj;
@@ -302,7 +301,10 @@ export function buildSpoofedSSE({
       };
       break;
     case "google-ai":
-      return JSON.stringify({
+      // TODO: google ai supports two streaming transports, SSE and JSON.
+      // we currently only support SSE.
+      // return JSON.stringify({
+      event = {
         candidates: [
           {
             content: { parts: [{ text: content }], role: "model" },
@@ -312,7 +314,8 @@ export function buildSpoofedSSE({
             safetyRatings: [],
           },
         ],
-      });
+      };
+      break;
     case "openai-image":
       return JSON.stringify(obj);
     default:

@@ -116,7 +116,7 @@ export class SSEStreamAdapter extends Transform {
     try {
       const hasParts = candidates[0].content?.parts?.length > 0;
       if (hasParts) {
-        return `data: ${JSON.stringify(data.value ?? data)}\n`;
+        return `data: ${JSON.stringify(data.value ?? data)}`;
       } else {
         this.log.error({ event: data }, "Received bad Google AI event");
         return `data: ${buildSpoofedSSE({

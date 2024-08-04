@@ -5,19 +5,20 @@ import {
 } from "./openai";
 import { APIFormatTransformer } from "./index";
 
+const GoogleAIV1ContentSchema = z.object({
+  parts: z.array(z.object({ text: z.string() })), // TODO: add other media types
+  role: z.enum(["user", "model"]).optional(),
+});
+
 // https://developers.generativeai.google/api/rest/generativelanguage/models/generateContent
 export const GoogleAIV1GenerateContentSchema = z
   .object({
     model: z.string().max(100), //actually specified in path but we need it for the router
     stream: z.boolean().optional().default(false), // also used for router
-    contents: z.array(
-      z.object({
-        parts: z.array(z.object({ text: z.string() })),
-        role: z.enum(["user", "model"]),
-      })
-    ),
+    contents: z.array(GoogleAIV1ContentSchema),
     tools: z.array(z.object({})).max(0).optional(),
-    safetySettings: z.array(z.object({})).max(0).optional(),
+    safetySettings: z.array(z.object({})).optional(),
+    systemInstruction: GoogleAIV1ContentSchema.optional(),
     generationConfig: z.object({
       temperature: z.number().optional(),
       maxOutputTokens: z.coerce
@@ -25,7 +26,7 @@ export const GoogleAIV1GenerateContentSchema = z
         .int()
         .optional()
         .default(16)
-        .transform((v) => Math.min(v, 1024)), // TODO: Add config
+        .transform((v) => Math.min(v, 4096)), // TODO: Add config
       candidateCount: z.literal(1).optional(),
       topP: z.number().optional(),
       topK: z.number().optional(),

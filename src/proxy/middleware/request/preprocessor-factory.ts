@@ -143,13 +143,18 @@ const handleTestMessage: RequestHandler = (req, res) => {
 };
 
 function isTestMessage(body: any) {
-  const { messages, prompt } = body;
+  const { messages, prompt, contents } = body;
 
   if (messages) {
     return (
       messages.length === 1 &&
       messages[0].role === "user" &&
       messages[0].content === "Hi"
+    );
+  } else if (contents) {
+    return (
+      contents.length === 1 &&
+      contents[0].parts[0]?.text === "Hi"
     );
   } else {
     return (

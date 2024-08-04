@@ -114,7 +114,8 @@ export abstract class KeyCheckerBase<TKey extends Key> {
     );
 
     // Don't check any individual key too often.
-    // Don't check anything at all at a rate faster than once per 3 seconds.
+    // Don't check anything at all more frequently than some minimum interval
+    // even if keys still need to be checked.
     const nextCheck = Math.max(
       oldestKey.lastChecked + this.keyCheckPeriod,
       this.lastCheck + this.minCheckInterval

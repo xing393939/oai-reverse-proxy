@@ -12,6 +12,7 @@ function getProxyAuthorizationFromRequest(req: Request): string | undefined {
   // pass the _proxy_ key in this header too, instead of providing it as a
   // Bearer token in the Authorization header.  So we need to check both.
   // Prefer the Authorization header if both are present.
+  // Google AI uses a key querystring parameter.
 
   if (req.headers.authorization) {
     const token = req.headers.authorization?.slice("Bearer ".length);
@@ -22,6 +23,12 @@ function getProxyAuthorizationFromRequest(req: Request): string | undefined {
   if (req.headers["x-api-key"]) {
     const token = req.headers["x-api-key"]?.toString();
     delete req.headers["x-api-key"];
+    return token;
+  }
+  
+  if (req.query.key) {
+    const token = req.query.key?.toString();
+    delete req.query.key;
     return token;
   }
 

@@ -23,7 +23,10 @@ export type OpenAIModelFamily =
   | "gpt4o"
   | "dall-e";
 export type AnthropicModelFamily = "claude" | "claude-opus";
-export type GoogleAIModelFamily = "gemini-pro";
+export type GoogleAIModelFamily =
+  | "gemini-flash"
+  | "gemini-pro"
+  | "gemini-ultra";
 export type MistralAIModelFamily =
   // mistral changes their model classes frequently so these no longer
   // correspond to specific models. consider them rough pricing tiers.
@@ -49,7 +52,9 @@ export const MODEL_FAMILIES = (<A extends readonly ModelFamily[]>(
   "dall-e",
   "claude",
   "claude-opus",
+  "gemini-flash",
   "gemini-pro",
+  "gemini-ultra",
   "mistral-tiny",
   "mistral-small",
   "mistral-medium",
@@ -94,7 +99,9 @@ export const MODEL_FAMILY_SERVICE: {
   "azure-gpt4-turbo": "azure",
   "azure-gpt4o": "azure",
   "azure-dall-e": "azure",
+  "gemini-flash": "google-ai",
   "gemini-pro": "google-ai",
+  "gemini-ultra": "google-ai",
   "mistral-tiny": "mistral-ai",
   "mistral-small": "mistral-ai",
   "mistral-medium": "mistral-ai",
@@ -134,8 +141,12 @@ export function getClaudeModelFamily(model: string): AnthropicModelFamily {
   return "claude";
 }
 
-export function getGoogleAIModelFamily(_model: string): ModelFamily {
-  return "gemini-pro";
+export function getGoogleAIModelFamily(model: string): GoogleAIModelFamily {
+  return model.includes("ultra")
+    ? "gemini-ultra"
+    : model.includes("flash")
+    ? "gemini-flash"
+    : "gemini-pro";
 }
 
 export function getMistralAIModelFamily(model: string): MistralAIModelFamily {

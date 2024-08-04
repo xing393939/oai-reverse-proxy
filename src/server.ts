@@ -87,6 +87,15 @@ app.use(blacklist);
 app.use(checkOrigin);
 
 app.use("/admin", adminRouter);
+app.use((req, _, next) => {
+  // For whatever reason SillyTavern just ignores the path a user provides
+  // when using Google AI with reverse proxy.  We'll fix it here.
+  if (req.path.startsWith("/v1beta/models/")) {
+    req.url = `${config.proxyEndpointRoute}/google-ai${req.url}`;
+    return next();
+  }
+  next();
+});
 app.use(config.proxyEndpointRoute, proxyRouter);
 app.use("/user", userRouter);
 if (config.staticServiceInfo) {
