@@ -143,8 +143,6 @@ export function sendErrorToClient({
     res.setHeader("x-oai-proxy-error-status", redactedOpts.statusCode || 500);
   }
 
-  req.log.info({ statusCode: res.statusCode, isStreaming, format, redactedOpts, event }, "Sending error response");
-  
   if (isStreaming) {
     if (!res.headersSent) {
       initializeSseStream(res);
@@ -222,19 +220,16 @@ export function buildSpoofedCompletion({
         stop_sequence: null,
       };
     case "google-ai":
-      // TODO: Native Google AI non-streaming responses are not supported, this
-      // is an untested guess at what the response should look like.
       return {
         candidates: [
           {
-            content: { parts: [{ text: content }], role: "assistant" },
+            content: { parts: [{ text: content }], role: "model" },
             finishReason: title,
             index: 0,
             tokenCount: null,
             safetyRatings: [],
           },
         ],
-        usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
       };
     case "openai-image":
       return obj;

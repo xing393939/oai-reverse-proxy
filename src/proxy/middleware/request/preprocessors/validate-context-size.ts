@@ -81,7 +81,7 @@ export const validateContextSize: RequestPreprocessor = async (req) => {
     modelMax = 200000;
   } else if (model.match(/^claude-3/)) {
     modelMax = 200000;
-  } else if (model.match(/^gemini-\d{3}$/)) {
+  } else if (model.match(/^gemini-$/)) {
     modelMax = 1024000;
   } else if (model.match(/^anthropic\.claude-3/)) {
     modelMax = 200000;

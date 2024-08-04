@@ -363,12 +363,14 @@ function addKeyToAggregates(k: KeyPoolKey) {
     }
     case "google-ai": {
       if (!keyIsGoogleAIKey(k)) throw new Error("Invalid key type");
-      const family = "gemini-pro";
-      sumTokens += k["gemini-proTokens"];
-      sumCost += getTokenCostUsd(family, k["gemini-proTokens"]);
-      increment(modelStats, `${family}__active`, k.isDisabled ? 0 : 1);
-      increment(modelStats, `${family}__revoked`, k.isRevoked ? 1 : 0);
-      increment(modelStats, `${family}__tokens`, k["gemini-proTokens"]);
+      k.modelFamilies.forEach((family) => {
+        const tokens = k[`${family}Tokens`];
+        sumTokens += tokens;
+        sumCost += getTokenCostUsd(family, tokens);
+        increment(modelStats, `${family}__tokens`, tokens);
+        increment(modelStats, `${family}__active`, k.isDisabled ? 0 : 1);
+        increment(modelStats, `${family}__revoked`, k.isRevoked ? 1 : 0);
+      });
       break;
     }
     case "mistral-ai": {
