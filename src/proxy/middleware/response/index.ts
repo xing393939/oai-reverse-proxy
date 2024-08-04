@@ -209,7 +209,6 @@ const handleUpstreamErrors: ProxyResHandlerWithBody = async (
   if (statusCode === 400) {
     switch (service) {
       case "openai":
-      case "google-ai":
       case "mistral-ai":
       case "azure":
         const filteredCodes = ["content_policy_violation", "content_filter"];
@@ -227,6 +226,9 @@ const handleUpstreamErrors: ProxyResHandlerWithBody = async (
       case "anthropic":
       case "aws":
         await handleAnthropicAwsBadRequestError(req, errorPayload);
+        break;
+      case "google-ai":
+        await handleGoogleAIBadRequestError(req, errorPayload);
         break;
       default:
         assertNever(service);
@@ -536,6 +538,42 @@ async function handleAzureRateLimitError(
     default:
       errorPayload.proxy_note = `Unrecognized rate limit error from Azure (${code}). Please report this.`;
       break;
+  }
+}
+
+//{"error":{"code":400,"message":"API Key not found. Please pass a valid API key.","status":"INVALID_ARGUMENT","details":[{"@type":"type.googleapis.com/google.rpc.ErrorInfo","reason":"API_KEY_INVALID","domain":"googleapis.com","metadata":{"service":"generativelanguage.googleapis.com"}}]}}
+//{"error":{"code":400,"message":"Gemini API free tier is not available in your country. Please enable billing on your project in Google AI Studio.","status":"FAILED_PRECONDITION"}}
+async function handleGoogleAIBadRequestError(
+  req: Request,
+  errorPayload: ProxiedErrorPayload
+) {
+  const error = errorPayload.error || {};
+  const { message, status, details } = error;
+
+  if (status === "INVALID_ARGUMENT") {
+    const reason = details?.[0]?.reason;
+    if (reason === "API_KEY_INVALID") {
+      req.log.warn(
+        { key: req.key?.hash, status, reason, msg: error.message },
+        "Received `API_KEY_INVALID` error from Google AI. Check the configured API key."
+      );
+      keyPool.disable(req.key!, "revoked");
+      errorPayload.proxy_note = `Assigned API key is invalid.`;
+    }
+  } else if (status === "FAILED_PRECONDITION") {
+    if (message.includes(/please enable billing/i)) {
+      req.log.warn(
+        { key: req.key?.hash, status, msg: error.message },
+        "Cannot use key due to billing restrictions."
+      );
+      keyPool.disable(req.key!, "revoked");
+      errorPayload.proxy_note = `Assigned API key cannot be used.`;
+    }
+  } else {
+    req.log.warn(
+      { key: req.key?.hash, status, msg: error.message },
+      "Received unexpected 400 error from Google AI."
+    );
   }
 }
 
