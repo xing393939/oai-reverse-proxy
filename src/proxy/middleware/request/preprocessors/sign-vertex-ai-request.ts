@@ -126,15 +126,15 @@ async function createSignedJWT(email: string, pkey: string): Promise<string> {
 }
 
 async function exchangeJwtForAccessToken(
-  signed_jwt: string
+  signedJwt: string
 ): Promise<[string | null, string]> {
-  const auth_url = "https://www.googleapis.com/oauth2/v4/token";
+  const authUrl = "https://www.googleapis.com/oauth2/v4/token";
   const params = {
     grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-    assertion: signed_jwt,
+    assertion: signedJwt,
   };
 
-  const r = await fetch(auth_url, {
+  const r = await fetch(authUrl, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: Object.entries(params)

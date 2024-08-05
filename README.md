@@ -7,9 +7,8 @@ Reverse proxy server for various LLM APIs.
 - [Features](#features)
 - [Usage Instructions](#usage-instructions)
   - [Self-hosting](#self-hosting)
-  - [Alternatives](#alternatives)
-    - [Huggingface (outdated, not advised)](#huggingface-outdated-not-advised)
-    - [Render (outdated, not advised)](#render-outdated-not-advised)
+  - [Huggingface (outdated, not advised)](#huggingface-outdated-not-advised)
+  - [Render (outdated, not advised)](#render-outdated-not-advised)
 - [Local Development](#local-development)
 
 ## What is this?
@@ -41,9 +40,6 @@ If you'd like to run your own instance of this server, you'll need to deploy it 
 [See here for instructions on how to self-host the application on your own VPS or local machine.](./docs/self-hosting.md)
 
 **Ensure you set the `TRUSTED_PROXIES` environment variable according to your deployment.** Refer to [.env.example](./.env.example) and [config.ts](./src/config.ts) for more information.
-
-### Alternatives
-Fiz and Sekrit are working on some alternative ways to deploy this conveniently. While I'm not involved in this effort beyond providing technical advice regarding my code, I'll link to their work here for convenience: [Sekrit's rentry](https://rentry.org/sekrit)  
 
 ### Huggingface (outdated, not advised)
 [See here for instructions on how to deploy to a Huggingface Space.](./docs/deploy-huggingface.md)
