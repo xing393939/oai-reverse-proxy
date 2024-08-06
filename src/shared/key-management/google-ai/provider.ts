@@ -6,7 +6,7 @@ import { getGoogleAIModelFamily, type GoogleAIModelFamily } from "../../models";
 import { PaymentRequiredError } from "../../errors";
 import { GoogleAIKeyChecker } from "./checker";
 
-// Note that Google AI is not the same as Vertex AI, both are provided by  
+// Note that Google AI is not the same as Vertex AI, both are provided by
 // Google but Vertex is the GCP product for enterprise, while Google API is a
 // development/hobbyist product. They use completely different APIs and keys.
 // https://ai.google.dev/docs/migrate_to_cloud
@@ -103,13 +103,15 @@ export class GoogleAIKeyProvider implements KeyProvider<GoogleAIKey> {
     return this.keys.map((k) => Object.freeze({ ...k, key: undefined }));
   }
 
-  public get(_model: string) {
-    const availableKeys = this.keys.filter((k) => !k.isDisabled);
+  public get(model: string) {
+    const neededFamily = getGoogleAIModelFamily(model);
+    const availableKeys = this.keys.filter(
+      (k) => !k.isDisabled && k.modelFamilies.includes(neededFamily)
+    );
     if (availableKeys.length === 0) {
       throw new PaymentRequiredError("No Google AI keys available");
     }
 
-    // (largely copied from the OpenAI provider, without trial key support)
     // Select a key, from highest priority to lowest priority:
     // 1. Keys which are not rate limited
     //    a. If all keys were rate limited recently, select the least-recently
