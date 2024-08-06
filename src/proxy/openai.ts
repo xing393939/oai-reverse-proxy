@@ -31,6 +31,7 @@ export const KNOWN_OPENAI_MODELS = [
   // GPT4o
   "gpt-4o",
   "gpt-4o-2024-05-13",
+  "gpt-4o-2024-08-06",
   // GPT4o Mini
   "gpt-4o-mini",
   "gpt-4o-mini-2024-07-18",
