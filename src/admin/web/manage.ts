@@ -268,7 +268,13 @@ router.post("/maintenance", (req, res) => {
   let flash = { type: "", message: "" };
   switch (action) {
     case "recheck": {
-      const checkable: LLMService[] = ["openai", "anthropic", "aws", "gcp","azure"];
+      const checkable: LLMService[] = [
+        "openai",
+        "anthropic",
+        "aws",
+        "gcp",
+        "azure",
+      ];
       checkable.forEach((s) => keyPool.recheck(s));
       const keyCount = keyPool
         .list()
@@ -348,14 +354,8 @@ router.post("/maintenance", (req, res) => {
       const tempUsers = userStore
         .getUsers()
         .filter((u) => u.type === "temporary");
-      const ipv4RangeMap: Map<string, Set<string>> = new Map<
-        string,
-        Set<string>
-      >();
-      const ipv6RangeMap: Map<string, Set<string>> = new Map<
-        string,
-        Set<string>
-      >();
+      const ipv4RangeMap = new Map<string, Set<string>>();
+      const ipv6RangeMap = new Map<string, Set<string>>();
 
       tempUsers.forEach((u) => {
         u.ip.forEach((ip) => {
@@ -365,14 +365,14 @@ router.post("/maintenance", (req, res) => {
               const subnet =
                 parsed.toNormalizedString().split(".").slice(0, 3).join(".") +
                 ".0/24";
-              const userSet = ipv4RangeMap.get(subnet) || new Set<string>();
+              const userSet = ipv4RangeMap.get(subnet) || new Set();
               userSet.add(u.token);
               ipv4RangeMap.set(subnet, userSet);
             } else if (parsed.kind() === "ipv6") {
               const subnet =
                 parsed.toNormalizedString().split(":").slice(0, 4).join(":") +
                 "::/48";
-              const userSet = ipv6RangeMap.get(subnet) || new Set<string>();
+              const userSet = ipv6RangeMap.get(subnet) || new Set();
               userSet.add(u.token);
               ipv6RangeMap.set(subnet, userSet);
             }

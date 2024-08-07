@@ -293,7 +293,8 @@ const handleUpstreamErrors: ProxyResHandlerWithBody = async (
             errorPayload.proxy_note = `Received 403 error. Key may be invalid.`;
         }
         return;
-      case "gcp":
+        case "mistral-ai":
+        case "gcp":
         keyPool.disable(req.key!, "revoked");
         errorPayload.proxy_note = `Assigned API key is invalid or revoked, please try again.`;
         return;

@@ -69,9 +69,9 @@ export class MistralAIKeyChecker extends KeyCheckerBase<MistralAIKey> {
   protected handleAxiosError(key: MistralAIKey, error: AxiosError) {
     if (error.response && MistralAIKeyChecker.errorIsMistralAIError(error)) {
       const { status, data } = error.response;
-      if (status === 401) {
+      if ([401, 403].includes(status)) {
         this.log.warn(
-          { key: key.hash, error: data },
+          { key: key.hash, error: data, status },
           "Key is invalid or revoked. Disabling key."
         );
         this.updateKey(key.hash, {
