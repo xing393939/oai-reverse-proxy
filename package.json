@@ -38,7 +38,7 @@
     "ejs": "^3.1.10",
     "express": "^4.18.2",
     "express-session": "^1.17.3",
-    "firebase-admin": "^12.1.0",
+    "firebase-admin": "^12.3.1",
     "glob": "^10.3.12",
     "googleapis": "^122.0.0",
     "http-proxy-middleware": "^3.0.0-beta.1",
@@ -48,7 +48,7 @@
     "node-schedule": "^2.1.1",
     "pino": "^8.11.0",
     "pino-http": "^8.3.3",
-    "sanitize-html": "2.12.1",
+    "sanitize-html": "^2.13.0",
     "sharp": "^0.32.6",
     "showdown": "^2.1.0",
     "source-map-support": "^0.5.21",
@@ -83,7 +83,8 @@
     "typescript": "^5.4.2"
   },
   "overrides": {
-    "postcss": "^8.4.31",
+    "braces": "^3.0.3",
+    "fast-xml-parser": "^4.4.1",
     "follow-redirects": "^1.15.4"
   }
 }
