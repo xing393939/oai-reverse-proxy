@@ -21,6 +21,7 @@ import {
   createOnProxyResHandler,
   ProxyResHandlerWithBody,
 } from "./middleware/response";
+import { BadRequestError } from "../shared/errors";
 
 // Mistral can't settle on a single naming scheme and deprecates models within
 // months of releasing them so this list is hard to keep up to date. 2024-07-28
@@ -170,7 +171,12 @@ export function detectMistralInputApi(req: Request) {
   if (messages) {
     req.inboundApi = "mistral-ai";
     req.outboundApi = "mistral-ai";
-  } else if (prompt) {
+  } else if (prompt && req.service === "mistral-ai") {
+    // Mistral La Plateforme doesn't expose a text completions endpoint.
+    throw new BadRequestError(
+      "Mistral (via La Plateforme API) does not support text completions. This format is only supported on Mistral via the AWS API."
+    );
+  } else if (prompt && req.service === "aws") {
     req.inboundApi = "mistral-text";
     req.outboundApi = "mistral-text";
   }

@@ -67,11 +67,13 @@ function applyMistralPromptFixes(req: Request): void {
     );
 
     // If the prompt relies on `prefix: true` for the last message, we need to
-    // convert it to a text completions request because Mistral support for
-    // this feature is limited (and completely broken on AWS Mistral).
+    // convert it to a text completions request because AWS Mistral support for
+    // this feature is broken.
+    // On Mistral La Plateforme, we can't do this because they don't expose
+    // a text completions endpoint.
     const { messages } = req.body;
     const lastMessage = messages && messages[messages.length - 1];
-    if (lastMessage && lastMessage.role === "assistant") {
+    if (lastMessage?.role === "assistant" && req.service === "aws") {
       // enable prefix if client forgot, otherwise the template will insert an
       // eos token which is very unlikely to be what the client wants.
       lastMessage.prefix = true;
