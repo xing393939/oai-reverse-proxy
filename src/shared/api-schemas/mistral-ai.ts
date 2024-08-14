@@ -45,7 +45,9 @@ const BaseMistralAIV1CompletionsSchema = z.object({
     .default([])
     .transform((v) => (Array.isArray(v) ? v : [v])),
   random_seed: z.number().int().min(0).optional(),
-  response_format: z.enum(["text", "json_object"]).optional().default("text"),
+  response_format: z
+    .object({ type: z.enum(["text", "json_object"]) })
+    .optional(),
   safe_prompt: z.boolean().optional().default(false),
 });
 
