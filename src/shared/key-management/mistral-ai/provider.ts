@@ -1,10 +1,11 @@
 import crypto from "crypto";
-import { Key, KeyProvider } from "..";
 import { config } from "../../../config";
 import { logger } from "../../../logger";
-import { MistralAIModelFamily, getMistralAIModelFamily } from "../../models";
-import { MistralAIKeyChecker } from "./checker";
 import { HttpError } from "../../errors";
+import { MistralAIModelFamily, getMistralAIModelFamily } from "../../models";
+import { createGenericGetLockoutPeriod, Key, KeyProvider } from "..";
+import { prioritizeKeys } from "../prioritize-keys";
+import { MistralAIKeyChecker } from "./checker";
 
 type MistralAIKeyUsage = {
   [K in MistralAIModelFamily as `${K}Tokens`]: number;
@@ -13,10 +14,6 @@ type MistralAIKeyUsage = {
 export interface MistralAIKey extends Key, MistralAIKeyUsage {
   readonly service: "mistral-ai";
   readonly modelFamilies: MistralAIModelFamily[];
-  /** The time at which this key was last rate limited. */
-  rateLimitedAt: number;
-  /** The time until which this key is rate limited. */
-  rateLimitedUntil: number;
 }
 
 /**
@@ -98,30 +95,8 @@ export class MistralAIKeyProvider implements KeyProvider<MistralAIKey> {
       throw new HttpError(402, "No Mistral AI keys available");
     }
 
-    // (largely copied from the OpenAI provider, without trial key support)
-    // Select a key, from highest priority to lowest priority:
-    // 1. Keys which are not rate limited
-    //    a. If all keys were rate limited recently, select the least-recently
-    //       rate limited key.
-    // 3. Keys which have not been used in the longest time
-
-    const now = Date.now();
-
-    const keysByPriority = availableKeys.sort((a, b) => {
-      const aRateLimited = now - a.rateLimitedAt < RATE_LIMIT_LOCKOUT;
-      const bRateLimited = now - b.rateLimitedAt < RATE_LIMIT_LOCKOUT;
-
-      if (aRateLimited && !bRateLimited) return 1;
-      if (!aRateLimited && bRateLimited) return -1;
-      if (aRateLimited && bRateLimited) {
-        return a.rateLimitedAt - b.rateLimitedAt;
-      }
-
-      return a.lastUsed - b.lastUsed;
-    });
-
-    const selectedKey = keysByPriority[0];
-    selectedKey.lastUsed = now;
+    const selectedKey = prioritizeKeys(availableKeys)[0];
+    selectedKey.lastUsed = Date.now();
     this.throttle(selectedKey.hash);
     return { ...selectedKey };
   }
@@ -150,22 +125,7 @@ export class MistralAIKeyProvider implements KeyProvider<MistralAIKey> {
     key[`${family}Tokens`] += tokens;
   }
 
-  public getLockoutPeriod() {
-    const activeKeys = this.keys.filter((k) => !k.isDisabled);
-    // Don't lock out if there are no keys available or the queue will stall.
-    // Just let it through so the add-key middleware can throw an error.
-    if (activeKeys.length === 0) return 0;
-
-    const now = Date.now();
-    const rateLimitedKeys = activeKeys.filter((k) => now < k.rateLimitedUntil);
-    const anyNotRateLimited = rateLimitedKeys.length < activeKeys.length;
-
-    if (anyNotRateLimited) return 0;
-
-    // If all keys are rate-limited, return the time until the first key is
-    // ready.
-    return Math.min(...activeKeys.map((k) => k.rateLimitedUntil - now));
-  }
+  getLockoutPeriod = createGenericGetLockoutPeriod(() => this.keys);
 
   /**
    * This is called when we receive a 429, which means there are already five

@@ -29,6 +29,10 @@ const MODEL_FAMILY_FRIENDLY_NAME: { [f in ModelFamily]: string } = {
   "mistral-large": "Mistral Large",
   "aws-claude": "AWS Claude (Sonnet)",
   "aws-claude-opus": "AWS Claude (Opus)",
+  "aws-mistral-tiny": "AWS Mistral 7B",
+  "aws-mistral-small": "AWS Mistral Nemo",
+  "aws-mistral-medium": "AWS Mistral Medium",
+  "aws-mistral-large": "AWS Mistral Large",
   "gcp-claude": "GCP Claude (Sonnet)",
   "gcp-claude-opus": "GCP Claude (Opus)",
   "azure-turbo": "Azure GPT-3.5 Turbo",
@@ -41,7 +45,7 @@ const MODEL_FAMILY_FRIENDLY_NAME: { [f in ModelFamily]: string } = {
 
 const converter = new showdown.Converter();
 const customGreeting = fs.existsSync("greeting.md")
-  ? `\n## Server Greeting\n${fs.readFileSync("greeting.md", "utf8")}`
+  ? `<div id="servergreeting">${fs.readFileSync("greeting.md", "utf8")}</div>`
   : "";
 let infoPageHtml: string | undefined;
 let infoPageLastUpdated = 0;

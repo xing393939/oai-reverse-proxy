@@ -9,7 +9,8 @@ export type APIFormat =
   | "anthropic-chat" // Anthropic's newer messages array format
   | "anthropic-text" // Legacy flat string prompt format
   | "google-ai"
-  | "mistral-ai";
+  | "mistral-ai"
+  | "mistral-text"
 
 export interface Key {
   /** The API key itself. Never log this, use `hash` instead. */
@@ -30,6 +31,10 @@ export interface Key {
   lastChecked: number;
   /** Hash of the key, for logging and to find the key in the pool. */
   hash: string;
+  /** The time at which this key was last rate limited. */
+  rateLimitedAt: number;
+  /** The time until which this key is rate limited. */
+  rateLimitedUntil: number;
 }
 
 /*
@@ -58,10 +63,32 @@ export interface KeyProvider<T extends Key = Key> {
   recheck(): void;
 }
 
+export function createGenericGetLockoutPeriod<T extends Key>(
+  getKeys: () => T[]
+) {
+  return function (this: unknown, family?: ModelFamily): number {
+    const keys = getKeys();
+    const activeKeys = keys.filter(
+      (k) => !k.isDisabled && (!family || k.modelFamilies.includes(family))
+    );
+
+    if (activeKeys.length === 0) return 0;
+
+    const now = Date.now();
+    const rateLimitedKeys = activeKeys.filter((k) => now < k.rateLimitedUntil);
+    const anyNotRateLimited = rateLimitedKeys.length < activeKeys.length;
+
+    if (anyNotRateLimited) return 0;
+
+    return Math.min(...activeKeys.map((k) => k.rateLimitedUntil - now));
+  };
+}
+
 export const keyPool = new KeyPool();
 export { AnthropicKey } from "./anthropic/provider";
-export { OpenAIKey } from "./openai/provider";
-export { GoogleAIKey } from "././google-ai/provider";
 export { AwsBedrockKey } from "./aws/provider";
 export { GcpKey } from "./gcp/provider";
 export { AzureOpenAIKey } from "./azure/provider";
+export { GoogleAIKey } from "././google-ai/provider";
+export { MistralAIKey } from "./mistral-ai/provider";
+export { OpenAIKey } from "./openai/provider";

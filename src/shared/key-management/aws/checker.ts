@@ -5,9 +5,21 @@ import axios, { AxiosError, AxiosRequestConfig, AxiosHeaders } from "axios";
 import { URL } from "url";
 import { KeyCheckerBase } from "../key-checker-base";
 import type { AwsBedrockKey, AwsBedrockKeyProvider } from "./provider";
-import { AwsBedrockModelFamily } from "../../models";
+import { getAwsBedrockModelFamily } from "../../models";
 import { config } from "../../../config";
 
+const KNOWN_MODEL_IDS = [
+  "anthropic.claude-v2",
+  "anthropic.claude-3-sonnet-20240229-v1:0",
+  "anthropic.claude-3-haiku-20240307-v1:0",
+  "anthropic.claude-3-opus-20240229-v1:0",
+  "anthropic.claude-3-5-sonnet-20240620-v1:0",
+  "mistral.mistral-7b-instruct-v0:2",
+  "mistral.mixtral-8x7b-instruct-v0:1",
+  "mistral.mistral-large-2402-v1:0",
+  "mistral.mistral-large-2407-v1:0",
+  "mistral.mistral-small-2402-v1:0", // Seems to return 400
+];
 const MIN_CHECK_INTERVAL = 3 * 1000; // 3 seconds
 const KEY_CHECK_PERIOD = 90 * 60 * 1000; // 90 minutes
 const AMZ_HOST =
@@ -47,36 +59,20 @@ export class AwsKeyChecker extends KeyCheckerBase<AwsBedrockKey> {
   }
 
   protected async testKeyOrFail(key: AwsBedrockKey) {
-    // Only check models on startup.  For now all models must be available to
-    // the proxy because we don't route requests to different keys.
-    let checks: Promise<boolean>[] = [];
     const isInitialCheck = !key.lastChecked;
-    if (isInitialCheck) {
-      checks = [
-        this.invokeModel("anthropic.claude-v2", key),
-        this.invokeModel("anthropic.claude-3-sonnet-20240229-v1:0", key),
-        this.invokeModel("anthropic.claude-3-haiku-20240307-v1:0", key),
-        this.invokeModel("anthropic.claude-3-opus-20240229-v1:0", key),
-        this.invokeModel("anthropic.claude-3-5-sonnet-20240620-v1:0", key),
-      ];
-    }
-
-    checks.unshift(this.checkLoggingConfiguration(key));
-
-    const [_logging, claudeV2, sonnet, haiku, opus, sonnet35] =
-      await Promise.all(checks);
-
-    this.log.debug(
-      { key: key.hash, _logging, claudeV2, sonnet, haiku, opus, sonnet35 },
-      "AWS model tests complete."
-    );
 
     if (isInitialCheck) {
-      const families: AwsBedrockModelFamily[] = [];
-      if (claudeV2 || sonnet || sonnet35 || haiku) families.push("aws-claude");
-      if (opus) families.push("aws-claude-opus");
+      const checks = await Promise.all(
+        KNOWN_MODEL_IDS.map(async (model) => {
+          const success = await this.invokeModel(model, key);
+          return { model, success };
+        })
+      );
+      const modelIds = checks
+        .filter(({ success }) => success)
+        .map(({ model }) => model);
 
-      if (families.length === 0) {
+      if (modelIds.length === 0) {
         this.log.warn(
           { key: key.hash },
           "Key does not have access to any models; disabling."
@@ -85,20 +81,19 @@ export class AwsKeyChecker extends KeyCheckerBase<AwsBedrockKey> {
       }
 
       this.updateKey(key.hash, {
-        sonnetEnabled: sonnet,
-        haikuEnabled: haiku,
-        sonnet35Enabled: sonnet35,
-        modelFamilies: families,
+        modelIds,
+        modelFamilies: Array.from(
+          new Set(modelIds.map(getAwsBedrockModelFamily))
+        ),
       });
     }
 
     this.log.info(
       {
         key: key.hash,
-        sonnet,
-        haiku,
-        families: key.modelFamilies,
         logged: key.awsLoggingStatus,
+        families: key.modelFamilies,
+        models: key.modelIds,
       },
       "Checked key."
     );
@@ -169,7 +164,19 @@ export class AwsKeyChecker extends KeyCheckerBase<AwsBedrockKey> {
    * key has access to the model, false if it does not. Throws an error if the
    * key is disabled.
    */
-  private async invokeModel(model: string, key: AwsBedrockKey) {
+  private async invokeModel(
+    model: string,
+    key: AwsBedrockKey
+  ): Promise<boolean> {
+    if (model.includes("claude")) {
+      return this.testClaudeModel(key, model);
+    } else if (model.includes("mistral")) {
+      return this.testMistralModel(key, model);
+    }
+    throw new Error("AwsKeyChecker#invokeModel: no implementation for model");
+  }
+
+  private async testClaudeModel(key: AwsBedrockKey, model: string): Promise<boolean> {
     const creds = AwsKeyChecker.getCredentialsFromKey(key);
     // This is not a valid invocation payload, but a 400 response indicates that
     // the principal at least has permission to invoke the model.
@@ -196,14 +203,15 @@ export class AwsKeyChecker extends KeyCheckerBase<AwsBedrockKey> {
     const errorType = (headers["x-amzn-errortype"] as string).split(":")[0];
     const errorMessage = data?.message;
 
-    // We only allow one type of 403 error, and we only allow it for one model.
+    // This message indicates the key is valid but this particular model is not
+    // accessible. Other 403s may indicate the key is not usable.
     if (
       status === 403 &&
       errorMessage?.match(/access to the model with the specified model ID/)
     ) {
       return false;
     }
-    
+
     // ResourceNotFound typically indicates that the tested model cannot be used
     // on the configured region for this set of credentials.
     if (status === 404) {
@@ -219,6 +227,58 @@ export class AwsKeyChecker extends KeyCheckerBase<AwsBedrockKey> {
     const correctErrorType = errorType === "ValidationException";
     const correctErrorMessage = errorMessage?.match(/max_tokens/);
     if (!correctErrorType || !correctErrorMessage) {
+      this.log.debug(
+        { key: key.hash, model, errorType, data, status },
+        "AWS InvokeModel test unsuccessful."
+      );
+      return false;
+    }
+
+    this.log.debug(
+      { key: key.hash, model, errorType, data, status },
+      "AWS InvokeModel test successful."
+    );
+    return true;
+  }
+
+  private async testMistralModel(key: AwsBedrockKey, model: string): Promise<boolean> {
+    const creds = AwsKeyChecker.getCredentialsFromKey(key);
+
+    const payload = {
+      max_tokens: -1,
+      prompt: "<s>[INST] What is your favourite condiment? [/INST]</s>",
+    }
+    const config: AxiosRequestConfig = {
+      method: "POST",
+      url: POST_INVOKE_MODEL_URL(creds.region, model),
+      data: payload,
+      validateStatus: (status) => [400, 403, 404].includes(status),
+      headers: {
+        "content-type": "application/json",
+        accept: "*/*",
+      }
+    };
+    await AwsKeyChecker.signRequestForAws(config, key);
+    const response = await axios.request(config);
+    const { data, status, headers } = response;
+    const errorType = (headers["x-amzn-errortype"] as string).split(":")[0];
+    const errorMessage = data?.message;
+
+    if (status === 403 || status === 404) {
+      this.log.debug(
+        { key: key.hash, model, errorType, data, status },
+        "AWS InvokeModel test returned 403 or 404."
+      );
+      return false;
+    }
+
+    const isBadRequest = status === 400;
+    const isValidationError = errorMessage?.match(/validation error/i);
+    if (isBadRequest && !isValidationError) {
+      this.log.debug(
+        { key: key.hash, model, errorType, data, status, headers },
+        "AWS InvokeModel test returned 400 but not a validation error."
+      );
       return false;
     }
 

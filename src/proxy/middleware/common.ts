@@ -221,9 +221,12 @@ export function getCompletionFromBody(req: Request, body: Record<string, any>) {
   switch (format) {
     case "openai":
     case "mistral-ai":
-      // Can be null if the model wants to invoke tools rather than return a
-      // completion.
-      return body.choices[0].message.content || "";
+      // Few possible values:
+      // - choices[0].message.content
+      // - choices[0].message with no content if model is invoking a tool
+      return body.choices?.[0]?.message?.content || "";
+    case "mistral-text":
+      return body.outputs?.[0]?.text || "";
     case "openai-text":
       return body.choices[0].text;
     case "anthropic-chat":
@@ -260,22 +263,22 @@ export function getCompletionFromBody(req: Request, body: Record<string, any>) {
   }
 }
 
-export function getModelFromBody(req: Request, body: Record<string, any>) {
+export function getModelFromBody(req: Request, resBody: Record<string, any>) {
   const format = req.outboundApi;
   switch (format) {
     case "openai":
     case "openai-text":
+      return resBody.model;
     case "mistral-ai":
-      return body.model;
+    case "mistral-text":
     case "openai-image":
+    case "google-ai":
+      // These formats don't have a model in the response body.
       return req.body.model;
     case "anthropic-chat":
     case "anthropic-text":
       // Anthropic confirms the model in the response, but AWS Claude doesn't.
-      return body.model || req.body.model;
-    case "google-ai":
-      // Google doesn't confirm the model in the response.
-      return req.body.model;
+      return resBody.model || req.body.model;
     default:
       assertNever(format);
   }

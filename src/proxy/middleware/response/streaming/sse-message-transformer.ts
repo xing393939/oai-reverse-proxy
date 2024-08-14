@@ -11,8 +11,11 @@ import {
   googleAIToOpenAI,
   OpenAIChatCompletionStreamEvent,
   openAITextToOpenAIChat,
+  mistralAIToOpenAI,
+  mistralTextToMistralChat,
   passthroughToOpenAI,
   StreamingCompletionTransformer,
+  MistralChatCompletionEvent,
 } from "./index";
 
 type SSEMessageTransformerOptions = TransformOptions & {
@@ -35,7 +38,9 @@ export class SSEMessageTransformer extends Transform {
   private readonly inputFormat: APIFormat;
   private readonly transformFn: StreamingCompletionTransformer<
     // TODO: Refactor transformers to not assume only OpenAI events as output
-    OpenAIChatCompletionStreamEvent | AnthropicV2StreamEvent
+    | OpenAIChatCompletionStreamEvent
+    | AnthropicV2StreamEvent
+    | MistralChatCompletionEvent
   >;
   private readonly log;
   private readonly fallbackId: string;
@@ -121,16 +126,17 @@ function eventIsOpenAIEvent(
 function getTransformer(
   responseApi: APIFormat,
   version?: string,
-  // There's only one case where we're not transforming back to OpenAI, which is
-  // Anthropic Chat response -> Anthropic Text request. This parameter is only
-  // used for that case.
+  // In most cases, we are transforming back to OpenAI. Some responses can be
+  // translated between two non-OpenAI formats, eg Anthropic Chat -> Anthropic
+  // Text, or Mistral Text -> Mistral Chat.
   requestApi: APIFormat = "openai"
 ): StreamingCompletionTransformer<
-  OpenAIChatCompletionStreamEvent | AnthropicV2StreamEvent
+  | OpenAIChatCompletionStreamEvent
+  | AnthropicV2StreamEvent
+  | MistralChatCompletionEvent
 > {
   switch (responseApi) {
     case "openai":
-    case "mistral-ai":
       return passthroughToOpenAI;
     case "openai-text":
       return openAITextToOpenAIChat;
@@ -140,10 +146,16 @@ function getTransformer(
         : anthropicV2ToOpenAI;
     case "anthropic-chat":
       return requestApi === "anthropic-text"
-        ? anthropicChatToAnthropicV2
+        ? anthropicChatToAnthropicV2 // User's legacy text prompt was converted to chat, and response must be converted back to text
         : anthropicChatToOpenAI;
     case "google-ai":
       return googleAIToOpenAI;
+    case "mistral-ai":
+      return mistralAIToOpenAI;
+    case "mistral-text":
+      return requestApi === "mistral-ai"
+        ? mistralTextToMistralChat // User's chat request was converted to text, and response must be converted back to chat
+        : mistralAIToOpenAI;
     case "openai-image":
       throw new Error(`SSE transformation not supported for ${responseApi}`);
     default:
