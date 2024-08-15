@@ -415,18 +415,18 @@ export const config: Config = {
   firebaseKey: getEnvWithDefault("FIREBASE_KEY", undefined),
   textModelRateLimit: getEnvWithDefault("TEXT_MODEL_RATE_LIMIT", 4),
   imageModelRateLimit: getEnvWithDefault("IMAGE_MODEL_RATE_LIMIT", 4),
-  maxContextTokensOpenAI: getEnvWithDefault("MAX_CONTEXT_TOKENS_OPENAI", 16384),
+  maxContextTokensOpenAI: getEnvWithDefault("MAX_CONTEXT_TOKENS_OPENAI", 32768),
   maxContextTokensAnthropic: getEnvWithDefault(
     "MAX_CONTEXT_TOKENS_ANTHROPIC",
-    0
+    32768
   ),
   maxOutputTokensOpenAI: getEnvWithDefault(
     ["MAX_OUTPUT_TOKENS_OPENAI", "MAX_OUTPUT_TOKENS"],
-    400
+    1024
   ),
   maxOutputTokensAnthropic: getEnvWithDefault(
     ["MAX_OUTPUT_TOKENS_ANTHROPIC", "MAX_OUTPUT_TOKENS"],
-    400
+    1024
   ),
   allowedModelFamilies: getEnvWithDefault(
     "ALLOWED_MODEL_FAMILIES",

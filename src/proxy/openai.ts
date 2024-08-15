@@ -35,6 +35,8 @@ export const KNOWN_OPENAI_MODELS = [
   // GPT4o Mini
   "gpt-4o-mini",
   "gpt-4o-mini-2024-07-18",
+  // GPT4o (ChatGPT)
+  "chatgpt-4o-latest",
   // GPT4 Turbo (superceded by GPT4o)
   "gpt-4-turbo",
   "gpt-4-turbo-2024-04-09", // gpt4-turbo stable, with vision

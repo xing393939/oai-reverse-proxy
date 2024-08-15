@@ -130,6 +130,7 @@ export const IMAGE_GEN_MODELS: ModelFamily[] = ["dall-e", "azure-dall-e"];
 
 export const OPENAI_MODEL_FAMILY_MAP: { [regex: string]: OpenAIModelFamily } = {
   "^gpt-4o(-\\d{4}-\\d{2}-\\d{2})?$": "gpt4o",
+  "^chatgpt-4o": "gpt4o",
   "^gpt-4o-mini(-\\d{4}-\\d{2}-\\d{2})?$": "turbo", // closest match
   "^gpt-4-turbo(-\\d{4}-\\d{2}-\\d{2})?$": "gpt4-turbo",
   "^gpt-4-turbo(-preview)?$": "gpt4-turbo",

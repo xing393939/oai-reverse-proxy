@@ -58,6 +58,8 @@ export const validateContextSize: RequestPreprocessor = async (req) => {
     modelMax = 16384;
   } else if (model.match(/^gpt-4o/)) {
     modelMax = 128000;
+  } else if (model.match(/^chatgpt-4o/)) {
+    modelMax = 128000;
   } else if (model.match(/gpt-4-turbo(-\d{4}-\d{2}-\d{2})?$/)) {
     modelMax = 131072;
   } else if (model.match(/gpt-4-turbo(-preview)?$/)) {
