@@ -35,6 +35,7 @@ export const signAwsRequest: RequestPreprocessor = async (req) => {
 
   const credential = getCredentialParts(req);
   const host = AMZ_HOST.replace("%REGION%", credential.region);
+
   // AWS only uses 2023-06-01 and does not actually check this header, but we
   // set it so that the stream adapter always selects the correct transformer.
   req.headers["anthropic-version"] = "2023-06-01";

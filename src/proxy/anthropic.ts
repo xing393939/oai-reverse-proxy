@@ -46,7 +46,7 @@ const getModelsResponse = () => {
     "claude-3-haiku-20240307",
     "claude-3-opus-20240229",
     "claude-3-sonnet-20240229",
-    "claude-3-5-sonnet-20240620"
+    "claude-3-5-sonnet-20240620",
   ];
 
   const models = claudeVariants.map((id) => ({
@@ -70,7 +70,7 @@ const handleModelRequest: RequestHandler = (_req, res) => {
 };
 
 /** Only used for non-streaming requests. */
-const anthropicResponseHandler: ProxyResHandlerWithBody = async (
+const anthropicBlockingResponseHandler: ProxyResHandlerWithBody = async (
   _proxyRes,
   req,
   res,
@@ -179,6 +179,28 @@ export function transformAnthropicChatResponseToOpenAI(
   };
 }
 
+/**
+ * If a client using the OpenAI compatibility endpoint requests an actual OpenAI
+ * model, reassigns it to Claude 3 Sonnet.
+ */
+function maybeReassignModel(req: Request) {
+  const model = req.body.model;
+  if (!model.startsWith("gpt-")) return;
+  req.body.model = "claude-3-sonnet-20240229";
+}
+
+/**
+ * If client requests more than 4096 output tokens the request must have a
+ * particular version header.
+ * https://docs.anthropic.com/en/release-notes/api#july-15th-2024
+ */
+function setAnthropicBetaHeader(req: Request) {
+  const { max_tokens_to_sample } = req.body;
+  if (max_tokens_to_sample > 4096) {
+    req.headers["anthropic-beta"] = "max-tokens-3-5-sonnet-2024-07-15";
+  }
+}
+
 const anthropicProxy = createQueueMiddleware({
   proxyMiddleware: createProxyMiddleware({
     target: "https://api.anthropic.com",
@@ -189,7 +211,7 @@ const anthropicProxy = createQueueMiddleware({
       proxyReq: createOnProxyReqHandler({
         pipeline: [addKey, addAnthropicPreamble, finalizeBody],
       }),
-      proxyRes: createOnProxyResHandler([anthropicResponseHandler]),
+      proxyRes: createOnProxyResHandler([anthropicBlockingResponseHandler]),
       error: handleProxyError,
     },
     // Abusing pathFilter to rewrite the paths dynamically.
@@ -212,6 +234,11 @@ const anthropicProxy = createQueueMiddleware({
     },
   }),
 });
+
+const nativeAnthropicChatPreprocessor = createPreprocessorMiddleware(
+  { inApi: "anthropic-chat", outApi: "anthropic-chat", service: "anthropic" },
+  { afterTransform: [setAnthropicBetaHeader] }
+);
 
 const nativeTextPreprocessor = createPreprocessorMiddleware({
   inApi: "anthropic-text",
@@ -268,11 +295,7 @@ anthropicRouter.get("/v1/models", handleModelRequest);
 anthropicRouter.post(
   "/v1/messages",
   ipLimiter,
-  createPreprocessorMiddleware({
-    inApi: "anthropic-chat",
-    outApi: "anthropic-chat",
-    service: "anthropic",
-  }),
+  nativeAnthropicChatPreprocessor,
   anthropicProxy
 );
 // Anthropic text completion endpoint. Translates to Anthropic chat completion
@@ -292,65 +315,5 @@ anthropicRouter.post(
   preprocessOpenAICompatRequest,
   anthropicProxy
 );
-// Temporarily force Anthropic Text to Anthropic Chat for frontends which do not
-// yet support the new model. Forces claude-3. Will be removed once common
-// frontends have been updated.
-anthropicRouter.post(
-  "/v1/:type(sonnet|opus)/:action(complete|messages)",
-  ipLimiter,
-  handleAnthropicTextCompatRequest,
-  createPreprocessorMiddleware({
-    inApi: "anthropic-text",
-    outApi: "anthropic-chat",
-    service: "anthropic",
-  }),
-  anthropicProxy
-);
-
-function handleAnthropicTextCompatRequest(
-  req: Request,
-  res: Response,
-  next: any
-) {
-  const type = req.params.type;
-  const action = req.params.action;
-  const alreadyInChatFormat = Boolean(req.body.messages);
-  const compatModel = `claude-3-${type}-20240229`;
-  req.log.info(
-    { type, inputModel: req.body.model, compatModel, alreadyInChatFormat },
-    "Handling Anthropic compatibility request"
-  );
-
-  if (action === "messages" || alreadyInChatFormat) {
-    return sendErrorToClient({
-      req,
-      res,
-      options: {
-        title: "Unnecessary usage of compatibility endpoint",
-        message: `Your client seems to already support the new Claude API format. This endpoint is intended for clients that do not yet support the new format.\nUse the normal \`/anthropic\` proxy endpoint instead.`,
-        format: "unknown",
-        statusCode: 400,
-        reqId: req.id,
-        obj: {
-          requested_endpoint: "/anthropic/" + type,
-          correct_endpoint: "/anthropic",
-        },
-      },
-    });
-  }
-
-  req.body.model = compatModel;
-  next();
-}
-
-/**
- * If a client using the OpenAI compatibility endpoint requests an actual OpenAI
- * model, reassigns it to Claude 3 Sonnet.
- */
-function maybeReassignModel(req: Request) {
-  const model = req.body.model;
-  if (!model.startsWith("gpt-")) return;
-  req.body.model = "claude-3-sonnet-20240229";
-}
 
 export const anthropic = anthropicRouter;
