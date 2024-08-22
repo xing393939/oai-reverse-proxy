@@ -17,7 +17,17 @@ export const transformOutboundPayload: RequestPreprocessor = async (req) => {
   const notTransformable =
     !isTextGenerationRequest(req) && !isImageGenerationRequest(req);
 
-  if (alreadyTransformed || notTransformable) return;
+  if (alreadyTransformed) {
+    return;
+  } else if (notTransformable) {
+    // This is probably an indication of a bug in the proxy.
+    const { inboundApi, outboundApi, method, path } = req;
+    req.log.warn(
+      { inboundApi, outboundApi, method, path },
+      "`transformOutboundPayload` called on a non-transformable request."
+    );
+    return;
+  }
 
   applyMistralPromptFixes(req);
 

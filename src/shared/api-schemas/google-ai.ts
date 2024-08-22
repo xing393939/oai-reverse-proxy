@@ -31,7 +31,7 @@ export const GoogleAIV1GenerateContentSchema = z
       topP: z.number().optional(),
       topK: z.number().optional(),
       stopSequences: z.array(z.string().max(500)).max(5).optional(),
-    }),
+    }).default({}),
   })
   .strip();
 export type GoogleAIChatMessage = z.infer<

@@ -49,6 +49,7 @@ app.use(
         // Don't log the prompt text on transform errors
         "body.messages",
         "body.prompt",
+        "body.contents",
       ],
       censor: "********",
     },

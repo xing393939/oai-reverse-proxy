@@ -152,7 +152,7 @@ googleAIRouter.post(
       outApi: "google-ai",
       service: "google-ai",
     },
-    { afterTransform: [maybeReassignModel, setStreamFlag] }
+    { beforeTransform: [maybeReassignModel], afterTransform: [setStreamFlag] }
   ),
   googleAIProxy
 );

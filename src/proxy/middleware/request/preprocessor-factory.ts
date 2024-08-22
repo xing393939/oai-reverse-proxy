@@ -84,7 +84,7 @@ async function executePreprocessors(
   } catch (error) {
     if (error.constructor.name === "ZodError") {
       const msg = error?.issues
-        ?.map((issue: ZodIssue) => issue.message)
+        ?.map((issue: ZodIssue) => `${issue.path.join(".")}: ${issue.message}`)
         .join("; ");
       req.log.warn({ issues: msg }, "Prompt validation failed.");
     } else {

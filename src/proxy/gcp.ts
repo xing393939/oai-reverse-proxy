@@ -1,6 +1,5 @@
-import { Request, RequestHandler, Response, Router } from "express";
+import { Request, RequestHandler, Router } from "express";
 import { createProxyMiddleware } from "http-proxy-middleware";
-import { v4 } from "uuid";
 import { config } from "../config";
 import { logger } from "../logger";
 import { createQueueMiddleware } from "./queue";
@@ -17,8 +16,6 @@ import {
   createOnProxyResHandler,
 } from "./middleware/response";
 import { transformAnthropicChatResponseToOpenAI } from "./anthropic";
-import { sendErrorToClient } from "./middleware/response/error-generator";
-
 const LATEST_GCP_SONNET_MINOR_VERSION = "20240229";
 
 let modelsCache: any = null;
