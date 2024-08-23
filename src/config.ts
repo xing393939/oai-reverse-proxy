@@ -519,7 +519,7 @@ function generateSigningKey() {
 }
 
 const signingKey = generateSigningKey();
-export const COOKIE_SECRET = signingKey;
+export const SECRET_SIGNING_KEY = signingKey;
 
 export async function assertConfigIsValid() {
   if (process.env.MODEL_RATE_LIMIT !== undefined) {

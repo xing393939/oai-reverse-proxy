@@ -17,7 +17,7 @@ import {
 } from "../../shared/users/schema";
 import { getLastNImages } from "../../shared/file-storage/image-history";
 import { blacklists, parseCidrs, whitelists } from "../../shared/cidr";
-import { invalidatePowHmacKey } from "../../user/web/pow-captcha";
+import { invalidatePowChallenges } from "../../user/web/pow-captcha";
 
 const router = Router();
 
@@ -323,7 +323,7 @@ router.post("/maintenance", (req, res) => {
         user.disabledReason = "Admin forced expiration.";
         userStore.upsertUser(user);
       });
-      invalidatePowHmacKey();
+      invalidatePowChallenges();
       flash.type = "success";
       flash.message = `${temps.length} temporary users marked for expiration.`;
       break;
@@ -348,6 +348,7 @@ router.post("/maintenance", (req, res) => {
         throw new HttpError(400, "Invalid difficulty" + selected);
       }
       config.powDifficultyLevel = selected;
+      invalidatePowChallenges();
       break;
     }
     case "generateTempIpReport": {

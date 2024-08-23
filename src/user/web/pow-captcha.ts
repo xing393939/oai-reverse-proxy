@@ -2,6 +2,7 @@ import crypto from "crypto";
 import express from "express";
 import argon2 from "@node-rs/argon2";
 import { z } from "zod";
+import { signMessage } from "../../shared/hmac-signing";
 import {
   authenticate,
   createUser,
@@ -13,15 +14,13 @@ import { config } from "../../config";
 /** Lockout time after verification in milliseconds */
 const LOCKOUT_TIME = 1000 * 60; // 60 seconds
 
-/** HMAC key for signing challenges; regenerated on startup */
-let hmacSecret = crypto.randomBytes(32).toString("hex");
+let powKeySalt = crypto.randomBytes(32).toString("hex");
 
 /**
- * Regenerate the HMAC key used for signing challenges. Calling this function
- * will invalidate all existing challenges.
+ * Invalidates any outstanding unsolved challenges.
  */
-export function invalidatePowHmacKey() {
-  hmacSecret = crypto.randomBytes(32).toString("hex");
+export function invalidatePowChallenges() {
+  powKeySalt = crypto.randomBytes(32).toString("hex");
 }
 
 const argon2Params = {
@@ -141,16 +140,6 @@ function generateChallenge(clientIp?: string, token?: string): Challenge {
   };
 }
 
-function signMessage(msg: any): string {
-  const hmac = crypto.createHmac("sha256", hmacSecret);
-  if (typeof msg === "object") {
-    hmac.update(JSON.stringify(msg));
-  } else {
-    hmac.update(msg);
-  }
-  return hmac.digest("hex");
-}
-
 async function verifySolution(
   challenge: Challenge,
   solution: string,
@@ -225,11 +214,11 @@ router.post("/challenge", (req, res) => {
       return;
     }
     const challenge = generateChallenge(req.ip, refreshToken);
-    const signature = signMessage(challenge);
+    const signature = signMessage(challenge, powKeySalt);
     res.json({ challenge, signature });
   } else {
     const challenge = generateChallenge(req.ip);
-    const signature = signMessage(challenge);
+    const signature = signMessage(challenge, powKeySalt);
     res.json({ challenge, signature });
   }
 });
@@ -253,7 +242,7 @@ router.post("/verify", async (req, res) => {
   }
 
   const { challenge, signature, solution } = result.data;
-  if (signMessage(challenge) !== signature) {
+  if (signMessage(challenge, powKeySalt) !== signature) {
     res.status(400).json({
       error:
         "Invalid signature; server may have restarted since challenge was issued. Please request a new challenge.",

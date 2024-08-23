@@ -1,14 +1,14 @@
 import cookieParser from "cookie-parser";
 import expressSession from "express-session";
 import MemoryStore from "memorystore";
-import { config, COOKIE_SECRET } from "../config";
+import { config, SECRET_SIGNING_KEY } from "../config";
 
 const ONE_WEEK = 1000 * 60 * 60 * 24 * 7;
 
-const cookieParserMiddleware = cookieParser(COOKIE_SECRET);
+const cookieParserMiddleware = cookieParser(SECRET_SIGNING_KEY);
 
 const sessionMiddleware = expressSession({
-  secret: COOKIE_SECRET,
+  secret: SECRET_SIGNING_KEY,
   resave: false,
   saveUninitialized: false,
   store: new (MemoryStore(expressSession))({ checkPeriod: ONE_WEEK }),
