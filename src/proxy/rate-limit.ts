@@ -108,7 +108,6 @@ export const ipLimiter = async (
   res.set("X-RateLimit-Reset", reset.toString());
 
   const retryAfterTime = getRetryAfter(rateLimitKey, type);
-  req.log.debug({ retryAfterTime }, "Retry-After header");
   if (retryAfterTime > 0) {
     const waitSec = Math.ceil(retryAfterTime).toString();
     res.set("Retry-After", waitSec);
