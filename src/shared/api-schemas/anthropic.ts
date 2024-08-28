@@ -63,7 +63,12 @@ export const AnthropicV1MessagesSchema = AnthropicV1BaseSchema.merge(
       .number()
       .int()
       .transform((v) => Math.min(v, CLAUDE_OUTPUT_MAX)),
-    system: z.string().optional(),
+    system: z
+      .union([
+        z.string(),
+        z.array(z.object({ type: z.literal("string"), text: z.string() })),
+      ])
+      .optional(),
   })
 );
 export type AnthropicChatMessage = z.infer<

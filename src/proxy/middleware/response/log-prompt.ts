@@ -75,7 +75,13 @@ const getPromptForRequest = (
     case "mistral-ai":
       return req.body.messages;
     case "anthropic-chat":
-      return { system: req.body.system, messages: req.body.messages };
+      let system = req.body.system;
+      if (Array.isArray(system)) {
+        system = system
+          .map((m: { type: string; text: string }) => m.text)
+          .join("\n");
+      }
+      return { system, messages: req.body.messages };
     case "openai-text":
     case "anthropic-text":
     case "mistral-text":
