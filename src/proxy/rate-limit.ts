@@ -1,14 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { config } from "../config";
 
-export const SHARED_IP_ADDRESSES = new Set([
-  // Agnai.chat
-  "157.230.249.32", // old
-  "157.245.148.56",
-  "174.138.29.50",
-  "209.97.162.44",
-]);
-
 const ONE_MINUTE_MS = 60 * 1000;
 
 type Timestamp = number;
@@ -20,7 +12,10 @@ const exemptedRequests: Timestamp[] = [];
 const isRecentAttempt = (now: Timestamp) => (attempt: Timestamp) =>
   attempt > now - ONE_MINUTE_MS;
 
-const getTryAgainInMs = (ip: string, type: "text" | "image") => {
+/**
+ * Returns duration in seconds to wait before retrying for Retry-After header.
+ */
+const getRetryAfter = (ip: string, type: "text" | "image") => {
   const now = Date.now();
   const attempts = lastAttempts.get(ip) || [];
   const validAttempts = attempts.filter(isRecentAttempt(now));
@@ -29,7 +24,7 @@ const getTryAgainInMs = (ip: string, type: "text" | "image") => {
     type === "text" ? config.textModelRateLimit : config.imageModelRateLimit;
 
   if (validAttempts.length >= limit) {
-    return validAttempts[0] - now + ONE_MINUTE_MS;
+    return (validAttempts[0] - now + ONE_MINUTE_MS) / 1000;
   } else {
     lastAttempts.set(ip, [...validAttempts, now]);
     return 0;
@@ -96,22 +91,11 @@ export const ipLimiter = async (
   if (!textLimit && !imageLimit) return next();
   if (req.user?.type === "special") return next();
 
-  // Exempts Agnai.chat from IP-based rate limiting because its IPs are shared
-  // by many users. Instead, the request queue will limit the number of such
-  // requests that may wait in the queue at a time, and sorts them to the end to
-  // let individual users go first.
-  if (SHARED_IP_ADDRESSES.has(req.ip)) {
-    exemptedRequests.push(Date.now());
-    req.log.info(
-      { ip: req.ip, recentExemptions: exemptedRequests.length },
-      "Exempting Agnai request from rate limiting."
-    );
-    return next();
-  }
-
-  const type = (req.baseUrl + req.path).includes("openai-image")
-    ? "image"
-    : "text";
+  const path = req.baseUrl + req.path;
+  const type =
+    path.includes("openai-image") || path.includes("images/generations")
+      ? "image"
+      : "text";
   const limit = type === "image" ? imageLimit : textLimit;
 
   // If user is authenticated, key rate limiting by their token. Otherwise, key
@@ -123,15 +107,15 @@ export const ipLimiter = async (
   res.set("X-RateLimit-Remaining", remaining.toString());
   res.set("X-RateLimit-Reset", reset.toString());
 
-  const tryAgainInMs = getTryAgainInMs(rateLimitKey, type);
-  if (tryAgainInMs > 0) {
-    res.set("Retry-After", tryAgainInMs.toString());
+  const retryAfterTime = getRetryAfter(rateLimitKey, type);
+  req.log.debug({ retryAfterTime }, "Retry-After header");
+  if (retryAfterTime > 0) {
+    const waitSec = Math.ceil(retryAfterTime).toString();
+    res.set("Retry-After", waitSec);
     res.status(429).json({
       error: {
         type: "proxy_rate_limited",
-        message: `This model type is rate limited to ${limit} prompts per minute. Please try again in ${Math.ceil(
-          tryAgainInMs / 1000
-        )} seconds.`,
+        message: `This model type is rate limited to ${limit} prompts per minute. Please try again in ${waitSec} seconds.`,
       },
     });
   } else {
