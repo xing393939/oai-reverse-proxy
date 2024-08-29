@@ -25,6 +25,7 @@ export class GcpKeyChecker extends KeyCheckerBase<GcpKey> {
       service: "gcp",
       keyCheckPeriod: KEY_CHECK_PERIOD,
       minCheckInterval: MIN_CHECK_INTERVAL,
+      recurringChecksEnabled: false,
       updateKey,
     });
   }
@@ -184,10 +185,7 @@ export class GcpKeyChecker extends KeyCheckerBase<GcpKey> {
     let cryptoKey = await crypto.subtle.importKey(
       "pkcs8",
       GcpKeyChecker.str2ab(atob(pkey)),
-      {
-        name: "RSASSA-PKCS1-v1_5",
-        hash: { name: "SHA-256" },
-      },
+      { name: "RSASSA-PKCS1-v1_5", hash: { name: "SHA-256" } },
       false,
       ["sign"]
     );
@@ -196,10 +194,7 @@ export class GcpKeyChecker extends KeyCheckerBase<GcpKey> {
     const issued = Math.floor(Date.now() / 1000);
     const expires = issued + 600;
 
-    const header = {
-      alg: "RS256",
-      typ: "JWT",
-    };
+    const header = { alg: "RS256", typ: "JWT" };
 
     const payload = {
       iss: email,
