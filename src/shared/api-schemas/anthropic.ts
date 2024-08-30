@@ -66,7 +66,7 @@ export const AnthropicV1MessagesSchema = AnthropicV1BaseSchema.merge(
     system: z
       .union([
         z.string(),
-        z.array(z.object({ type: z.literal("string"), text: z.string() })),
+        z.array(z.object({ type: z.literal("text"), text: z.string() })),
       ])
       .optional(),
   })
