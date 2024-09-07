@@ -25,6 +25,7 @@ const KNOWN_MODEL_IDS: ModuleAliasTuple[] = [
   ["mistral.mistral-small-2402-v1:0"], // Seems to return 400
 ];
 
+const KEY_CHECK_BATCH_SIZE = 2; // AWS checker needs to do lots of concurrent requests so should lower the batch size
 const MIN_CHECK_INTERVAL = 3 * 1000; // 3 seconds
 const KEY_CHECK_PERIOD = 90 * 60 * 1000; // 90 minutes
 const AMZ_HOST =
@@ -77,6 +78,7 @@ export class AwsKeyChecker extends KeyCheckerBase<AwsBedrockKey> {
       service: "aws",
       keyCheckPeriod: KEY_CHECK_PERIOD,
       minCheckInterval: MIN_CHECK_INTERVAL,
+      keyCheckBatchSize: KEY_CHECK_BATCH_SIZE,
       updateKey,
     });
   }
@@ -212,6 +214,36 @@ See https://docs.aws.amazon.com/bedrock/latest/userguide/cross-region-inference-
     key: AwsBedrockKey
   ): Promise<boolean> {
     if (model.includes("claude")) {
+      // If inference profiles are available, try testing model with them.
+      // If they are not available or the invocation fails with the inference
+      // profile, fall back to regular model ID.
+      const { region } = AwsKeyChecker.getCredentialsFromKey(key);
+      const continent = region.split("-")[0];
+      const profile = key.inferenceProfileIds.find(
+        (id) => `${continent}.${model}` === id
+      );
+
+      if (profile) {
+        this.log.debug(
+          { key: key.hash, model, profile },
+          "Testing model via inference profile."
+        );
+        let result: boolean;
+        try {
+          result = await this.testClaudeModel(key, profile);
+        } catch (e) {
+          this.log.error(
+            { key: key.hash, model, profile, error: e.message },
+            "Error testing model with inference profile; trying model ID directly."
+          );
+          result = false;
+        }
+
+        // If the profile worked, we'll return success. Caller will add the
+        // model (not the profile) to the list of enabled models, but the
+        // profile will be used when the key is used for inference.
+        if (result) return true;
+      }
       return this.testClaudeModel(key, model);
     } else if (model.includes("mistral")) {
       return this.testMistralModel(key, model);

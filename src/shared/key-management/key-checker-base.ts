@@ -7,6 +7,7 @@ type KeyCheckerOptions<TKey extends Key = Key> = {
   service: string;
   keyCheckPeriod: number;
   minCheckInterval: number;
+  keyCheckBatchSize?: number;
   recurringChecksEnabled?: boolean;
   updateKey: (hash: string, props: Partial<TKey>) => void;
 };
@@ -22,6 +23,8 @@ export abstract class KeyCheckerBase<TKey extends Key> {
    * than this.
    */
   protected readonly keyCheckPeriod: number;
+  /** Maximum number of keys to check simultaneously. */
+  protected readonly keyCheckBatchSize: number;
   protected readonly updateKey: (hash: string, props: Partial<TKey>) => void;
   protected readonly keys: TKey[] = [];
   protected log: pino.Logger;
@@ -33,6 +36,7 @@ export abstract class KeyCheckerBase<TKey extends Key> {
     this.keyCheckPeriod = opts.keyCheckPeriod;
     this.minCheckInterval = opts.minCheckInterval;
     this.recurringChecksEnabled = opts.recurringChecksEnabled ?? true;
+    this.keyCheckBatchSize = opts.keyCheckBatchSize ?? 12;
     this.updateKey = opts.updateKey;
     this.service = opts.service;
     this.log = logger.child({ module: "key-checker", service: opts.service });
@@ -78,7 +82,7 @@ export abstract class KeyCheckerBase<TKey extends Key> {
     checkLog.debug({ numEnabled, numUnchecked }, "Scheduling next check...");
 
     if (numUnchecked > 0) {
-      const keycheckBatch = uncheckedKeys.slice(0, 12);
+      const keycheckBatch = uncheckedKeys.slice(0, this.keyCheckBatchSize);
 
       this.timeout = setTimeout(async () => {
         try {
