@@ -35,7 +35,7 @@ const RATE_LIMIT_LOCKOUT = 4000;
  * to be used again. This is to prevent the queue from flooding a key with too
  * many requests while we wait to learn whether previous ones succeeded.
  */
-const KEY_REUSE_DELAY = 500;
+const KEY_REUSE_DELAY = 250;
 
 export class AwsBedrockKeyProvider implements KeyProvider<AwsBedrockKey> {
   readonly service = "aws";
