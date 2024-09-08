@@ -39,14 +39,21 @@ export function getTokenCostUsd(model: ModelFamily, tokens: number) {
     case "claude-opus":
       cost = 0.000015;
       break;
+    case "aws-mistral-tiny":
     case "mistral-tiny":
-      cost = 0.00000031;
+      cost = 0.00000025;
       break;
+    case "aws-mistral-small":
     case "mistral-small":
-      cost = 0.00000132;
+      cost = 0.0000003;
       break;
+    case "aws-mistral-medium":
     case "mistral-medium":
-      cost = 0.0000055;
+      cost = 0.00000275;
+      break;
+    case "aws-mistral-large":
+    case "mistral-large":
+      cost = 0.000003;
       break;
   }
   return cost * Math.max(0, tokens);
