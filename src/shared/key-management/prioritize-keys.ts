@@ -20,13 +20,13 @@ export function prioritizeKeys<T extends Key>(
   const now = Date.now();
 
   return keys.sort((a, b) => {
-    const aRateLimited = now - a.rateLimitedAt < a.rateLimitedUntil;
-    const bRateLimited = now - b.rateLimitedAt < b.rateLimitedUntil;
+    const aRateLimited = now < a.rateLimitedUntil;
+    const bRateLimited = now < b.rateLimitedUntil;
 
     if (aRateLimited && !bRateLimited) return 1;
     if (!aRateLimited && bRateLimited) return -1;
     if (aRateLimited && bRateLimited) {
-      return a.rateLimitedAt - b.rateLimitedAt;
+      return a.rateLimitedUntil - b.rateLimitedUntil;
     }
 
     if (customComparator) {

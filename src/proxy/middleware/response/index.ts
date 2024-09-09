@@ -358,6 +358,20 @@ const handleUpstreamErrors: ProxyResHandlerWithBody = async (
       default:
         assertNever(service);
     }
+  } else if (statusCode === 503) {
+    switch (service) {
+      case "aws":
+        if (
+          errorPayload.error?.type === "ServiceUnavailableException" &&
+          errorPayload.error?.message?.match(/too many connections/i)
+        ) {
+          errorPayload.proxy_note = `The requested AWS Bedrock model is overloaded. Try again in a few minutes, or try another model.`;
+        }
+        break;
+      default:
+        errorPayload.proxy_note = `Upstream service unavailable. Try again later.`;
+        break;
+    }
   } else {
     errorPayload.proxy_note = `Unrecognized error from upstream service.`;
   }
