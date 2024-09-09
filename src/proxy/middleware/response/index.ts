@@ -212,11 +212,16 @@ const handleUpstreamErrors: ProxyResHandlerWithBody = async (
     delete errorPayload.message;
   } else if (service === "gcp") {
     // Try to standardize the error format for GCP
-    if (errorPayload.error?.code) { // GCP Error
-      errorPayload.error = { message: errorPayload.error.message, type: errorPayload.error.status || errorPayload.error.code };
+    if (errorPayload.error?.code) {
+      // GCP Error
+      errorPayload.error = {
+        message: errorPayload.error.message,
+        type: errorPayload.error.status || errorPayload.error.code,
+      };
     }
   }
 
+  // TODO: this shitshow should be switched on the service, not the error code
   if (statusCode === 400) {
     switch (service) {
       case "openai":
@@ -293,8 +298,8 @@ const handleUpstreamErrors: ProxyResHandlerWithBody = async (
             errorPayload.proxy_note = `Received 403 error. Key may be invalid.`;
         }
         return;
-        case "mistral-ai":
-        case "gcp":
+      case "mistral-ai":
+      case "gcp":
         keyPool.disable(req.key!, "revoked");
         errorPayload.proxy_note = `Assigned API key is invalid or revoked, please try again.`;
         return;
@@ -357,6 +362,18 @@ const handleUpstreamErrors: ProxyResHandlerWithBody = async (
         break;
       default:
         assertNever(service);
+    }
+  } else if (statusCode === 503) {
+    switch (service) {
+      case "aws":
+        if (
+          errorPayload.error?.type === "ServiceUnavailableException" &&
+          errorPayload.error?.message?.match(/too many connections/i)
+        ) {
+          // This is effectively a 429 rate limit error under another name.
+          await handleAwsRateLimitError(req, errorPayload);
+        }
+        break;
     }
   } else {
     errorPayload.proxy_note = `Unrecognized error from upstream service.`;
@@ -446,6 +463,7 @@ async function handleAwsRateLimitError(
 ) {
   const errorType = errorPayload.error?.type;
   switch (errorType) {
+    case "ServiceUnavailableException":
     case "ThrottlingException":
       keyPool.markRateLimited(req.key!);
       await reenqueueRequest(req);
