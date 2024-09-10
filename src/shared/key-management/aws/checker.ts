@@ -269,7 +269,7 @@ See https://docs.aws.amazon.com/bedrock/latest/userguide/cross-region-inference-
       method: "POST",
       url: POST_INVOKE_MODEL_URL(creds.region, model),
       data: payload,
-      validateStatus: (status) => [400, 403, 404].includes(status),
+      validateStatus: (status) => [400, 403, 404, 503].includes(status),
     };
     config.headers = new AxiosHeaders({
       "content-type": "application/json",
@@ -280,6 +280,18 @@ See https://docs.aws.amazon.com/bedrock/latest/userguide/cross-region-inference-
     const { data, status, headers } = response;
     const errorType = (headers["x-amzn-errortype"] as string).split(":")[0];
     const errorMessage = data?.message;
+
+    // 503 ServiceUnavailableException errors are usually due to temporary
+    // outages in the AWS infrastructure. However, because a 503 response also
+    // indicates that the key can invoke the model, we can treat this as a
+    // successful response.
+    if (status === 503 && errorType.match(/ServiceUnavailableException/i)) {
+      this.log.warn(
+        { key: key.hash, model, errorType, data, status, headers },
+        "Model is accessible, but may be temporarily unavailable."
+      );
+      return true;
+    }
 
     // This message indicates the key is valid but this particular model is not
     // accessible. Other 403s may indicate the key is not usable.
