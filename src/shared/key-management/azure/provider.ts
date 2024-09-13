@@ -18,6 +18,7 @@ export interface AzureOpenAIKey extends Key, AzureOpenAIKeyUsage {
   readonly service: "azure";
   readonly modelFamilies: AzureOpenAIModelFamily[];
   contentFiltering: boolean;
+  modelIds: string[];
 }
 
 /**
@@ -72,7 +73,10 @@ export class AzureOpenAIKeyProvider implements KeyProvider<AzureOpenAIKey> {
         "azure-gpt4-32kTokens": 0,
         "azure-gpt4-turboTokens": 0,
         "azure-gpt4oTokens": 0,
+        "azure-o1Tokens": 0,
+        "azure-o1-miniTokens": 0,
         "azure-dall-eTokens": 0,
+        modelIds: [],
       };
       this.keys.push(newKey);
     }

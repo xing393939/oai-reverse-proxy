@@ -1,12 +1,8 @@
-import { RequestHandler, Router } from "express";
+import { Request, RequestHandler, Router } from "express";
 import { createProxyMiddleware } from "http-proxy-middleware";
 import { config } from "../config";
-import { keyPool, OpenAIKey } from "../shared/key-management";
-import {
-  getOpenAIModelFamily,
-  ModelFamily,
-  OpenAIModelFamily,
-} from "../shared/models";
+import { AzureOpenAIKey, keyPool, OpenAIKey } from "../shared/key-management";
+import { getOpenAIModelFamily } from "../shared/models";
 import { logger } from "../logger";
 import { createQueueMiddleware } from "./queue";
 import { ipLimiter } from "./rate-limit";
@@ -27,103 +23,66 @@ import {
 } from "./middleware/response";
 
 // https://platform.openai.com/docs/models/overview
-export const KNOWN_OPENAI_MODELS = [
-  // GPT4o
-  "gpt-4o",
-  "gpt-4o-2024-05-13",
-  "gpt-4o-2024-08-06",
-  // GPT4o Mini
-  "gpt-4o-mini",
-  "gpt-4o-mini-2024-07-18",
-  // GPT4o (ChatGPT)
-  "chatgpt-4o-latest",
-  // GPT4 Turbo (superceded by GPT4o)
-  "gpt-4-turbo",
-  "gpt-4-turbo-2024-04-09", // gpt4-turbo stable, with vision
-  "gpt-4-turbo-preview", // alias for latest turbo preview
-  "gpt-4-0125-preview", // gpt4-turbo preview 2
-  "gpt-4-1106-preview", // gpt4-turbo preview 1
-  // Launch GPT4
-  "gpt-4",
-  "gpt-4-0613",
-  "gpt-4-0314", // legacy
-  // GPT3.5 Turbo (superceded by GPT4o Mini)
-  "gpt-3.5-turbo",
-  "gpt-3.5-turbo-0125", // latest turbo
-  "gpt-3.5-turbo-1106", // older turbo
-  // Text Completion
-  "gpt-3.5-turbo-instruct",
-  "gpt-3.5-turbo-instruct-0914",
-  // Embeddings
-  "text-embedding-ada-002",
-  // Known deprecated models
-  "gpt-4-32k", // alias for 0613
-  "gpt-4-32k-0314", // EOL 2025-06-06
-  "gpt-4-32k-0613", // EOL 2025-06-06
-  "gpt-4-vision-preview", // EOL 2024-12-06
-  "gpt-4-1106-vision-preview", // EOL 2024-12-06
-  "gpt-3.5-turbo-0613", // EOL 2024-09-13
-  "gpt-3.5-turbo-0301", // not on the website anymore, maybe unavailable
-  "gpt-3.5-turbo-16k", // alias for 0613
-  "gpt-3.5-turbo-16k-0613", // EOL 2024-09-13
-];
-
 let modelsCache: any = null;
 let modelsCacheTime = 0;
 
-export function generateModelList(models = KNOWN_OPENAI_MODELS) {
-  // Get available families and snapshots
-  let availableFamilies = new Set<OpenAIModelFamily>();
-  const availableSnapshots = new Set<string>();
-  for (const key of keyPool.list()) {
-    if (key.isDisabled || key.service !== "openai") continue;
-    const asOpenAIKey = key as OpenAIKey;
-    asOpenAIKey.modelFamilies.forEach((f) => availableFamilies.add(f));
-    asOpenAIKey.modelSnapshots.forEach((s) => availableSnapshots.add(s));
-  }
+export function generateModelList(service: "openai" | "azure") {
+  const keys = keyPool
+    .list()
+    .filter((k) => k.service === service && !k.isDisabled) as
+    | OpenAIKey[]
+    | AzureOpenAIKey[];
+  if (keys.length === 0) return [];
 
-  // Remove disabled families
-  const allowed = new Set<ModelFamily>(config.allowedModelFamilies);
-  availableFamilies = new Set(
-    [...availableFamilies].filter((x) => allowed.has(x))
+  const allowedModelFamilies = new Set(config.allowedModelFamilies);
+  const modelFamilies = new Set(
+    keys
+      .flatMap((k) => k.modelFamilies)
+      .filter((f) => allowedModelFamilies.has(f))
   );
 
-  return models
-    .map((id) => ({
-      id,
-      object: "model",
-      created: new Date().getTime(),
-      owned_by: "openai",
-      permission: [
-        {
-          id: "modelperm-" + id,
-          object: "model_permission",
-          created: new Date().getTime(),
-          organization: "*",
-          group: null,
-          is_blocking: false,
-        },
-      ],
-      root: id,
-      parent: null,
-    }))
-    .filter((model) => {
-      // First check if the family is available
-      const hasFamily = availableFamilies.has(getOpenAIModelFamily(model.id));
-      if (!hasFamily) return false;
+  const modelIds = new Set(
+    keys
+      .flatMap((k) => k.modelIds)
+      .filter((id) => {
+        const allowed = modelFamilies.has(getOpenAIModelFamily(id));
+        const known = ["gpt", "o1", "dall-e", "text-embedding-ada-002"].some(
+          (prefix) => id.startsWith(prefix)
+        );
+        const isFinetune = id.includes("ft");
+        return allowed && known && !isFinetune;
+      })
+  );
 
-      // Then for snapshots, ensure the specific snapshot is available
-      const isSnapshot = model.id.match(/-\d{4}(-preview)?$/);
-      if (!isSnapshot) return true;
-      return availableSnapshots.has(model.id);
-    });
+  return Array.from(modelIds).map((id) => ({
+    id,
+    object: "model",
+    created: new Date().getTime(),
+    owned_by: service,
+    permission: [
+      {
+        id: "modelperm-" + id,
+        object: "model_permission",
+        created: new Date().getTime(),
+        organization: "*",
+        group: null,
+        is_blocking: false,
+      },
+    ],
+    root: id,
+    parent: null,
+  }));
 }
 
 const handleModelRequest: RequestHandler = (_req, res) => {
   if (new Date().getTime() - modelsCacheTime < 1000 * 60) {
     return res.status(200).json(modelsCache);
   }
-  const result = generateModelList();
+
+  if (!config.openaiKey) return { object: "list", data: [] };
+
+  const result = generateModelList("openai");
+
   modelsCache = { object: "list", data: result };
   modelsCacheTime = new Date().getTime();
   res.status(200).json(modelsCache);
@@ -242,11 +201,10 @@ openaiRouter.post(
 openaiRouter.post(
   "/v1/chat/completions",
   ipLimiter,
-  createPreprocessorMiddleware({
-    inApi: "openai",
-    outApi: "openai",
-    service: "openai",
-  }),
+  createPreprocessorMiddleware(
+    { inApi: "openai", outApi: "openai", service: "openai" },
+    { afterTransform: [fixupMaxTokens] }
+  ),
   openaiProxy
 );
 // Embeddings endpoint.
@@ -256,5 +214,12 @@ openaiRouter.post(
   createEmbeddingsPreprocessorMiddleware(),
   openaiEmbeddingsProxy
 );
+
+function fixupMaxTokens(req: Request) {
+  if (!req.body.max_completion_tokens) {
+    req.body.max_completion_tokens = req.body.max_tokens;
+  }
+  delete req.body.max_tokens;
+}
 
 export const openai = openaiRouter;

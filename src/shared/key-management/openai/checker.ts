@@ -63,7 +63,7 @@ export class OpenAIKeyChecker extends KeyCheckerBase<OpenAIKey> {
         key: key.hash,
         models: key.modelFamilies,
         trial: key.isTrial,
-        snapshots: key.modelSnapshots,
+        snapshots: key.modelIds,
       },
       "Checked key."
     );
@@ -74,10 +74,11 @@ export class OpenAIKeyChecker extends KeyCheckerBase<OpenAIKey> {
   ): Promise<OpenAIModelFamily[]> {
     const opts = { headers: OpenAIKeyChecker.getHeaders(key) };
     const { data } = await axios.get<GetModelsResponse>(GET_MODELS_URL, opts);
+    const ids = new Set<string>();
     const families = new Set<OpenAIModelFamily>();
-    const models = data.data.map(({ id }) => {
+    data.data.forEach(({ id }) => {
+      ids.add(id);
       families.add(getOpenAIModelFamily(id, "turbo"));
-      return id;
     });
 
     // disable dall-e for trial keys due to very low per-day quota that tends to
@@ -86,36 +87,12 @@ export class OpenAIKeyChecker extends KeyCheckerBase<OpenAIKey> {
       families.delete("dall-e");
     }
 
-    // as of 2023-11-18, many keys no longer return the dalle3 model but still
-    // have access to it via the api for whatever reason.
-    // if (families.has("dall-e") && !models.find(({ id }) => id === "dall-e-3")) {
-    //   families.delete("dall-e");
-    // }
-
-    // as of January 2024, 0314 model snapshots are only available on keys which
-    // have used them in the past. these keys also seem to have 32k-0314 even
-    // though they don't have the base gpt-4-32k model alias listed. if a key
-    // has access to both 0314 models we will flag it as such and force add
-    // gpt4-32k to its model families.
-    if (
-      ["gpt-4-0314", "gpt-4-32k-0314"].every((m) => models.find((n) => n === m))
-    ) {
-      this.log.info({ key: key.hash }, "Added gpt4-32k to -0314 key.");
-      families.add("gpt4-32k");
-    }
-
-    // We want to update the key's model families here, but we don't want to
-    // update its `lastChecked` timestamp because we need to let the liveness
-    // check run before we can consider the key checked.
-
-    const familiesArray = [...families];
-    const keyFromPool = this.keys.find((k) => k.hash === key.hash)!;
     this.updateKey(key.hash, {
-      modelSnapshots: models.filter((m) => m.match(/-\d{4}(-preview)?$/)),
-      modelFamilies: familiesArray,
-      lastChecked: keyFromPool.lastChecked,
+      modelIds: Array.from(ids),
+      modelFamilies: Array.from(families),
     });
-    return familiesArray;
+
+    return key.modelFamilies;
   }
 
   private async maybeCreateOrganizationClones(key: OpenAIKey) {
@@ -333,9 +310,11 @@ export class OpenAIKeyChecker extends KeyCheckerBase<OpenAIKey> {
   }
 
   static getHeaders(key: OpenAIKey) {
+    const useOrg = !key.key.includes("svcacct");
     return {
       Authorization: `Bearer ${key.key}`,
-      ...(key.organizationId && { "OpenAI-Organization": key.organizationId }),
+      ...(useOrg &&
+        key.organizationId && { "OpenAI-Organization": key.organizationId }),
     };
   }
 }

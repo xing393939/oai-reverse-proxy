@@ -137,6 +137,7 @@ export class AzureOpenAIKeyChecker extends KeyCheckerBase<AzureOpenAIKey> {
     }
 
     const family = getAzureOpenAIModelFamily(data.model);
+    this.updateKey(key.hash, { modelIds: [data.model] });
 
     // Azure returns "gpt-4" even for GPT-4 Turbo, so we need further checks.
     // Otherwise we can use the model family Azure returned.

@@ -26,7 +26,9 @@ const handleModelRequest: RequestHandler = (_req, res) => {
   if (new Date().getTime() - modelListValid < 1000 * 60) {
     return res.status(200).json(modelListCache);
   }
-  const result = generateModelList(KNOWN_MODELS);
+  const result = generateModelList().filter((m: { id: string }) =>
+    KNOWN_MODELS.includes(m.id)
+  );
   modelListCache = { object: "list", data: result };
   modelListValid = new Date().getTime();
   res.status(200).json(modelListCache);

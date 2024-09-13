@@ -5,9 +5,9 @@ import { Key } from "./index";
  * lowest priority.  Keys are prioritized in the following order:
  *
  * 1. Keys which are not rate limited
- *    a. If all keys were rate limited recently, select the least-recently
+ *    - If all keys were rate limited recently, select the least-recently
  *       rate limited key.
- *    b. Otherwise, select the first key.
+ *    - Otherwise, select the first key.
  * 2. Keys which have not been used in the longest time
  * 3. Keys according to the custom comparator, if provided
  * @param keys The list of keys to sort

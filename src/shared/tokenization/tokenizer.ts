@@ -86,6 +86,8 @@ type TokenCountRequest = { req: Request } & (
 
 type TokenCountResult = {
   token_count: number;
+  /** Additional tokens for reasoning, if applicable. */
+  reasoning_tokens?: number;
   tokenizer: string;
   tokenization_duration_ms: number;
 };

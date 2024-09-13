@@ -1,14 +1,8 @@
 import { RequestHandler, Router } from "express";
 import { createProxyMiddleware } from "http-proxy-middleware";
 import { config } from "../config";
-import { keyPool } from "../shared/key-management";
-import {
-  AzureOpenAIModelFamily,
-  getAzureOpenAIModelFamily,
-  ModelFamily,
-} from "../shared/models";
 import { logger } from "../logger";
-import { KNOWN_OPENAI_MODELS } from "./openai";
+import { generateModelList } from "./openai";
 import { createQueueMiddleware } from "./queue";
 import { ipLimiter } from "./rate-limit";
 import { handleProxyError } from "./middleware/common";
@@ -26,48 +20,18 @@ import {
 let modelsCache: any = null;
 let modelsCacheTime = 0;
 
-function getModelsResponse() {
-  if (new Date().getTime() - modelsCacheTime < 1000 * 60) {
-    return modelsCache;
-  }
-
-  let available = new Set<AzureOpenAIModelFamily>();
-  for (const key of keyPool.list()) {
-    if (key.isDisabled || key.service !== "azure") continue;
-    key.modelFamilies.forEach((family) =>
-      available.add(family as AzureOpenAIModelFamily)
-    );
-  }
-  const allowed = new Set<ModelFamily>(config.allowedModelFamilies);
-  available = new Set([...available].filter((x) => allowed.has(x)));
-
-  const models = KNOWN_OPENAI_MODELS.map((id) => ({
-    id,
-    object: "model",
-    created: new Date().getTime(),
-    owned_by: "azure",
-    permission: [
-      {
-        id: "modelperm-" + id,
-        object: "model_permission",
-        created: new Date().getTime(),
-        organization: "*",
-        group: null,
-        is_blocking: false,
-      },
-    ],
-    root: id,
-    parent: null,
-  })).filter((model) => available.has(getAzureOpenAIModelFamily(model.id)));
-
-  modelsCache = { object: "list", data: models };
-  modelsCacheTime = new Date().getTime();
-
-  return modelsCache;
-}
-
 const handleModelRequest: RequestHandler = (_req, res) => {
-  res.status(200).json(getModelsResponse());
+  if (new Date().getTime() - modelsCacheTime < 1000 * 60) {
+    return res.status(200).json(modelsCache);
+  }
+
+  if (!config.azureCredentials) return { object: "list", data: [] };
+
+  const result = generateModelList("azure");
+
+  modelsCache = { object: "list", data: result };
+  modelsCacheTime = new Date().getTime();
+  res.status(200).json(modelsCache);
 };
 
 const azureOpenaiResponseHandler: ProxyResHandlerWithBody = async (

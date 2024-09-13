@@ -3,12 +3,11 @@ import http from "http";
 import { Key, KeyProvider } from "../index";
 import { config } from "../../../config";
 import { logger } from "../../../logger";
-import { OpenAIKeyChecker } from "./checker";
 import { getOpenAIModelFamily, OpenAIModelFamily } from "../../models";
 import { PaymentRequiredError } from "../../errors";
+import { OpenAIKeyChecker } from "./checker";
+import { prioritizeKeys } from "../prioritize-keys";
 
-// Flattening model families instead of using a nested object for easier
-// cloning.
 type OpenAIKeyUsage = {
   [K in OpenAIModelFamily as `${K}Tokens`]: number;
 };
@@ -49,13 +48,9 @@ export interface OpenAIKey extends Key, OpenAIKeyUsage {
    */
   rateLimitTokensReset: number;
   /**
-   * This key's maximum request rate for GPT-4, per minute.
-   */
-  gpt4Rpm: number;
-  /**
    * Model snapshots available.
    */
-  modelSnapshots: string[];
+  modelIds: string[];
 }
 
 export type OpenAIKeyUpdate = Omit<
@@ -117,9 +112,10 @@ export class OpenAIKeyProvider implements KeyProvider<OpenAIKey> {
         "gpt4-32kTokens": 0,
         "gpt4-turboTokens": 0,
         gpt4oTokens: 0,
+        "o1Tokens": 0,
+        "o1-miniTokens": 0,
         "dall-eTokens": 0,
-        gpt4Rpm: 0,
-        modelSnapshots: [],
+        modelIds: [],
       };
       this.keys.push(newKey);
     }
@@ -140,27 +136,14 @@ export class OpenAIKeyProvider implements KeyProvider<OpenAIKey> {
    * Don't mutate returned keys, use a KeyPool method instead.
    **/
   public list() {
-    return this.keys.map((key) => {
-      return Object.freeze({
-        ...key,
-        key: undefined,
-      });
-    });
+    return this.keys.map((key) => Object.freeze({ ...key, key: undefined }));
   }
 
   public get(requestModel: string) {
     let model = requestModel;
 
-    // Special case for GPT-4-32k. Some keys have access to only gpt4-32k-0314
-    // but not gpt-4-32k-0613, or its alias gpt-4-32k. Because we add a model
-    // family if a key has any snapshot, we need to dealias gpt-4-32k here so
-    // we can look for the specific snapshot.
-    // gpt-4-32k is superceded by gpt4-turbo so this shouldn't ever change.
-    if (model === "gpt-4-32k") model = "gpt-4-32k-0613";
-
     const neededFamily = getOpenAIModelFamily(model);
     const excludeTrials = model === "text-embedding-ada-002";
-    const needsSnapshot = model.match(/-\d{4}(-preview)?$/);
 
     const availableKeys = this.keys.filter(
       // Allow keys which
@@ -168,58 +151,22 @@ export class OpenAIKeyProvider implements KeyProvider<OpenAIKey> {
         !key.isDisabled && // are not disabled
         key.modelFamilies.includes(neededFamily) && // have access to the model family we need
         (!excludeTrials || !key.isTrial) && // and are not trials if we don't want them
-        (!needsSnapshot || key.modelSnapshots.includes(model)) // and have the specific snapshot we need
+        (!config.checkKeys || key.modelIds.includes(model)) // and have the specific snapshot we need
     );
 
     if (availableKeys.length === 0) {
       throw new PaymentRequiredError(
-        `No keys can fulfill request for ${model}`
+        `No OpenAI keys available for model ${model}`
       );
     }
 
-    // Select a key, from highest priority to lowest priority:
-    // 1. Keys which are not rate limited
-    //    a. We ignore rate limits from >30 seconds ago
-    //    b. If all keys were rate limited in the last minute, select the
-    //       least recently rate limited key
-    // 2. Keys which are trials
-    // 3. Keys which do *not* have access to GPT-4-32k
-    // 4. Keys which have not been used in the longest time
-
-    const now = Date.now();
-    const rateLimitThreshold = 30 * 1000;
-
-    const keysByPriority = availableKeys.sort((a, b) => {
-      // TODO: this isn't quite right; keys are briefly artificially rate-
-      // limited when they are selected, so this will deprioritize keys that
-      // may not actually be limited, simply because they were used recently.
-      // This should be adjusted to use a new `rateLimitedUntil` field instead
-      // of `rateLimitedAt`.
-      const aRateLimited = now - a.rateLimitedAt < rateLimitThreshold;
-      const bRateLimited = now - b.rateLimitedAt < rateLimitThreshold;
-
-      if (aRateLimited && !bRateLimited) return 1;
-      if (!aRateLimited && bRateLimited) return -1;
-      if (aRateLimited && bRateLimited) {
-        return a.rateLimitedAt - b.rateLimitedAt;
-      }
-      // Neither key is rate limited, continue
-
-      if (a.isTrial && !b.isTrial) return -1;
-      if (!a.isTrial && b.isTrial) return 1;
-      // Neither or both keys are trials, continue
-
-      const aHas32k = a.modelFamilies.includes("gpt4-32k");
-      const bHas32k = b.modelFamilies.includes("gpt4-32k");
-      if (aHas32k && !bHas32k) return 1;
-      if (!aHas32k && bHas32k) return -1;
-      // Neither or both keys have 32k, continue
-
-      return a.lastUsed - b.lastUsed;
-    });
+    const keysByPriority = prioritizeKeys(
+      availableKeys,
+      (a, b) => +a.isTrial - +b.isTrial
+    );
 
     const selectedKey = keysByPriority[0];
-    selectedKey.lastUsed = now;
+    selectedKey.lastUsed = Date.now();
     this.throttle(selectedKey.hash);
     return { ...selectedKey };
   }
@@ -273,6 +220,9 @@ export class OpenAIKeyProvider implements KeyProvider<OpenAIKey> {
    * the request, or returns 0 if a key is ready immediately.
    */
   public getLockoutPeriod(family: OpenAIModelFamily): number {
+    // TODO: this is really inefficient on servers with large key pools and we
+    // are calling it every 50ms, per model family.
+
     const activeKeys = this.keys.filter(
       (key) => !key.isDisabled && key.modelFamilies.includes(family)
     );
@@ -318,11 +268,15 @@ export class OpenAIKeyProvider implements KeyProvider<OpenAIKey> {
   public markRateLimited(keyHash: string) {
     this.log.debug({ key: keyHash }, "Key rate limited");
     const key = this.keys.find((k) => k.hash === keyHash)!;
-    key.rateLimitedAt = Date.now();
-    // DALL-E requests do not send headers telling us when the rate limit will
-    // be reset so we need to set a fallback value here.  Other models will have
-    // this overwritten by the `updateRateLimits` method.
-    key.rateLimitRequestsReset = 20000;
+    const now = Date.now();
+    key.rateLimitedAt = now;
+
+    // Most OpenAI reqeuests will provide a `x-ratelimit-reset-requests` header
+    // header telling us when to try again which will be set in a call to
+    // `updateRateLimits`.  These values below are fallbacks in case the header
+    // is not provided.
+    key.rateLimitRequestsReset = 10000;
+    key.rateLimitedUntil = now + key.rateLimitRequestsReset;
   }
 
   public incrementUsage(keyHash: string, model: string, tokens: number) {
@@ -348,6 +302,13 @@ export class OpenAIKeyProvider implements KeyProvider<OpenAIKey> {
     if (!requestsReset && !tokensReset) {
       this.log.warn({ key: key.hash }, `No ratelimit headers; skipping update`);
       return;
+    }
+
+    const { rateLimitedAt, rateLimitRequestsReset, rateLimitTokensReset } = key;
+    const rateLimitedUntil =
+      rateLimitedAt + Math.max(rateLimitRequestsReset, rateLimitTokensReset);
+    if (rateLimitedUntil > Date.now()) {
+      key.rateLimitedUntil = rateLimitedUntil;
     }
   }
 

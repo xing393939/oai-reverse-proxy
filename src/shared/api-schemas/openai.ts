@@ -54,6 +54,13 @@ export const OpenAIV1ChatCompletionSchema = z
       .nullish()
       .default(Math.min(OPENAI_OUTPUT_MAX, 16384))
       .transform((v) => Math.min(v ?? OPENAI_OUTPUT_MAX, OPENAI_OUTPUT_MAX)),
+    // max_completion_tokens replaces max_tokens in the OpenAI API.
+    // for backwards compatibility, we accept both and move the value in
+    // max_tokens to max_completion_tokens in proxy middleware.
+    max_completion_tokens: z.coerce
+      .number()
+      .int()
+      .optional(),
     frequency_penalty: z.number().optional().default(0),
     presence_penalty: z.number().optional().default(0),
     logit_bias: z.any().optional(),

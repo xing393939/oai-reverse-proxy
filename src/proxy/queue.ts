@@ -35,14 +35,12 @@ const log = logger.child({ module: "request-queue" });
 const USER_CONCURRENCY_LIMIT = parseInt(
   process.env.USER_CONCURRENCY_LIMIT ?? "1"
 );
-/** Maximum number of queue slots for Agnai.chat requests. */
-const AGNAI_CONCURRENCY_LIMIT = USER_CONCURRENCY_LIMIT * 5;
 const MIN_HEARTBEAT_SIZE = parseInt(process.env.MIN_HEARTBEAT_SIZE_B ?? "512");
 const MAX_HEARTBEAT_SIZE =
   1024 * parseInt(process.env.MAX_HEARTBEAT_SIZE_KB ?? "1024");
 const HEARTBEAT_INTERVAL =
   1000 * parseInt(process.env.HEARTBEAT_INTERVAL_SEC ?? "5");
-const LOAD_THRESHOLD = parseFloat(process.env.LOAD_THRESHOLD ?? "50");
+const LOAD_THRESHOLD = parseFloat(process.env.LOAD_THRESHOLD ?? "150");
 const PAYLOAD_SCALE_FACTOR = parseFloat(
   process.env.PAYLOAD_SCALE_FACTOR ?? "6"
 );

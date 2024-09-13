@@ -790,5 +790,7 @@ function parseCsv(val: string): string[] {
 }
 
 function getDefaultModelFamilies(): ModelFamily[] {
-  return MODEL_FAMILIES.filter((f) => !f.includes("dall-e")) as ModelFamily[];
+  return MODEL_FAMILIES.filter(
+    (f) => !f.includes("dall-e") && !f.includes("o1")
+  ) as ModelFamily[];
 }

@@ -212,8 +212,12 @@ const handleUpstreamErrors: ProxyResHandlerWithBody = async (
     delete errorPayload.message;
   } else if (service === "gcp") {
     // Try to standardize the error format for GCP
-    if (errorPayload.error?.code) { // GCP Error
-      errorPayload.error = { message: errorPayload.error.message, type: errorPayload.error.status || errorPayload.error.code };
+    if (errorPayload.error?.code) {
+      // GCP Error
+      errorPayload.error = {
+        message: errorPayload.error.message,
+        type: errorPayload.error.status || errorPayload.error.code,
+      };
     }
   }
 
@@ -231,7 +235,7 @@ const handleUpstreamErrors: ProxyResHandlerWithBody = async (
           // same 429 billing error that other models return.
           await handleOpenAIRateLimitError(req, errorPayload);
         } else {
-          errorPayload.proxy_note = `The upstream API rejected the request. Your prompt may be too long for ${req.body?.model}.`;
+          errorPayload.proxy_note = `The upstream API rejected the request. Check the error message for details.`;
         }
         break;
       case "anthropic":
@@ -293,8 +297,8 @@ const handleUpstreamErrors: ProxyResHandlerWithBody = async (
             errorPayload.proxy_note = `Received 403 error. Key may be invalid.`;
         }
         return;
-        case "mistral-ai":
-        case "gcp":
+      case "mistral-ai":
+      case "gcp":
         keyPool.disable(req.key!, "revoked");
         errorPayload.proxy_note = `Assigned API key is invalid or revoked, please try again.`;
         return;
@@ -688,15 +692,23 @@ const countResponseTokens: ProxyResHandlerWithBody = async (
     const completion = getCompletionFromBody(req, body);
     const tokens = await countTokens({ req, completion, service });
 
+    if (req.service === "openai" || req.service === "azure") {
+      // O1 consumes (a significant amount of) invisible tokens for the chain-
+      // of-thought reasoning. We have no way to count these other than to check
+      // the response body.
+      tokens.reasoning_tokens =
+        body.usage?.completion_tokens_details?.reasoning_tokens;
+    }
+
     req.log.debug(
-      { service, tokens, prevOutputTokens: req.outputTokens },
+      { service, prevOutputTokens: req.outputTokens, tokens },
       `Counted tokens for completion`
     );
     if (req.tokenizerInfo) {
       req.tokenizerInfo.completion_tokens = tokens;
     }
 
-    req.outputTokens = tokens.token_count;
+    req.outputTokens = tokens.token_count + (tokens.reasoning_tokens ?? 0);
   } catch (error) {
     req.log.warn(
       error,
