@@ -343,6 +343,7 @@ export class OpenAIKeyProvider implements KeyProvider<OpenAIKey> {
 
     key.rateLimitedAt = Date.now();
     key.rateLimitRequestsReset = KEY_REUSE_DELAY;
+    key.rateLimitedUntil = Date.now() + KEY_REUSE_DELAY;
   }
 }
 

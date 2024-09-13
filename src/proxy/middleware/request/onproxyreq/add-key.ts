@@ -71,7 +71,7 @@ export const addKey: HPMRequestCallback = (proxyReq, req) => {
       break;
     case "openai":
       const key: OpenAIKey = assignedKey as OpenAIKey;
-      if (key.organizationId) {
+      if (key.organizationId && !key.key.includes("svcacct")) {
         proxyReq.setHeader("OpenAI-Organization", key.organizationId);
       }
       proxyReq.setHeader("Authorization", `Bearer ${assignedKey.key}`);

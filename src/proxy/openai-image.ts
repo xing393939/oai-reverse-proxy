@@ -26,7 +26,7 @@ const handleModelRequest: RequestHandler = (_req, res) => {
   if (new Date().getTime() - modelListValid < 1000 * 60) {
     return res.status(200).json(modelListCache);
   }
-  const result = generateModelList().filter((m: { id: string }) =>
+  const result = generateModelList("openai").filter((m: { id: string }) =>
     KNOWN_MODELS.includes(m.id)
   );
   modelListCache = { object: "list", data: result };
