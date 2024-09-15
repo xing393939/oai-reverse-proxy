@@ -46,7 +46,7 @@ export function generateModelList(service: "openai" | "azure") {
       .flatMap((k) => k.modelIds)
       .filter((id) => {
         const allowed = modelFamilies.has(getOpenAIModelFamily(id));
-        const known = ["gpt", "o1", "dall-e", "text-embedding-ada-002"].some(
+        const known = ["gpt", "o1", "dall-e", "chatgpt", "text-embedding"].some(
           (prefix) => id.startsWith(prefix)
         );
         const isFinetune = id.includes("ft");
