@@ -300,6 +300,8 @@ router.post("/verify", async (req, res) => {
     const user = getUser(challenge.token);
     if (user) {
       user.expiresAt = Date.now() + config.powTokenHours * 60 * 60 * 1000;
+      user.disabledAt = undefined;
+      user.disabledReason = undefined;
       upsertUser(user);
       req.log.info(
         { token: `...${challenge.token.slice(-5)}` },

@@ -299,10 +299,11 @@ export function disableUser(token: string, reason?: string) {
   if (!user) return;
   user.disabledAt = Date.now();
   user.disabledReason = reason;
-  if (user.meta) {
-    // manually banned tokens cannot be refreshed
-    user.meta.refreshable = false;
+  if (!user.meta) {
+    user.meta = {};
   }
+  // manually banned tokens cannot be refreshed
+  user.meta.refreshable = false;
   usersToFlush.add(token);
 }
 
@@ -418,7 +419,8 @@ function getModelFamilyForQuotaUsage(
   // differentiate between Azure and OpenAI variants of the same model.
   if (model.includes("azure")) return getAzureOpenAIModelFamily(model);
   if (model.includes("anthropic.")) return getAwsBedrockModelFamily(model);
-  if (model.startsWith("claude-") && model.includes("@")) return getGcpModelFamily(model);
+  if (model.startsWith("claude-") && model.includes("@"))
+    return getGcpModelFamily(model);
 
   switch (api) {
     case "openai":
