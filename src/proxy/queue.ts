@@ -24,9 +24,10 @@ import {
 import { initializeSseStream } from "../shared/streaming";
 import { logger } from "../logger";
 import { getUniqueIps } from "./rate-limit";
-import { RequestPreprocessor } from "./middleware/request";
-import { handleProxyError } from "./middleware/common";
+import { ProxyReqMutator, RequestPreprocessor } from "./middleware/request";
 import { sendErrorToClient } from "./middleware/response/error-generator";
+import { ProxyReqManager } from "./middleware/request/proxy-req-manager";
+import { classifyErrorAndSend } from "./middleware/common";
 
 const queue: Request[] = [];
 const log = logger.child({ module: "request-queue" });
@@ -67,6 +68,14 @@ const sharesIdentifierWith = (incoming: Request) => (queued: Request) =>
   getIdentifier(queued) === getIdentifier(incoming);
 
 async function enqueue(req: Request) {
+  if (req.socket.destroyed || req.res?.writableEnded) {
+    // In rare cases, a request can be disconnected after it is dequeued for a
+    // retry, but before it is re-enqueued. In this case we may miss the abort
+    // and the request will loop in the queue forever.
+    req.log.warn("Attempt to enqueue aborted request.");
+    throw new Error("Attempt to enqueue aborted request.");
+  }
+
   const enqueuedRequestCount = queue.filter(sharesIdentifierWith(req)).length;
 
   if (enqueuedRequestCount >= USER_CONCURRENCY_LIMIT) {
@@ -139,7 +148,14 @@ export function dequeue(partition: ModelFamily): Request | undefined {
   }
 
   const req = modelQueue.reduce((prev, curr) =>
-    prev.startTime + config.tokensPunishmentFactor*((prev.promptTokens ?? 0) + (prev.outputTokens ?? 0)) < curr.startTime + config.tokensPunishmentFactor*((curr.promptTokens ?? 0) + (curr.outputTokens ?? 0)) ? prev : curr
+    prev.startTime +
+      config.tokensPunishmentFactor *
+        ((prev.promptTokens ?? 0) + (prev.outputTokens ?? 0)) <
+    curr.startTime +
+      config.tokensPunishmentFactor *
+        ((curr.promptTokens ?? 0) + (curr.outputTokens ?? 0))
+      ? prev
+      : curr
   );
   queue.splice(queue.indexOf(req), 1);
 
@@ -306,26 +322,35 @@ export function getQueueLength(partition: ModelFamily | "all" = "all") {
 }
 
 export function createQueueMiddleware({
-  beforeProxy,
+  mutations = [],
   proxyMiddleware,
 }: {
-  beforeProxy?: RequestPreprocessor;
+  mutations?: ProxyReqMutator[];
   proxyMiddleware: Handler;
 }): Handler {
   return async (req, res, next) => {
     req.proceed = async () => {
-      if (beforeProxy) {
-        try {
-          // Hack to let us run asynchronous middleware before the
-          // http-proxy-middleware handler. This is used to sign AWS requests
-          // before they are proxied, as the signing is asynchronous.
-          // Unlike RequestPreprocessors, this runs every time the request is
-          // dequeued, not just the first time.
-          await beforeProxy(req);
-        } catch (err) {
-          return handleProxyError(err, req, res);
+      // canonicalize the stream field which is set in a few places not always
+      // consistently
+      req.isStreaming = req.isStreaming || String(req.body.stream) === "true";
+      req.body.stream = req.isStreaming;
+
+      try {
+        // Just before executing the proxyMiddleware, we will create a
+        // ProxyReqManager to track modifications to the request. This allows
+        // us to revert those changes if the proxied request fails with a
+        // retryable error. That happens in proxyMiddleware's onProxyRes
+        // handler.
+        const changeManager = new ProxyReqManager(req);
+        req.changeManager = changeManager;
+        for (const mutator of mutations) {
+          await mutator(changeManager);
         }
+      } catch (err) {
+        // Failure during request preparation is a fatal error.
+        return classifyErrorAndSend(err, req, res);
       }
+
       proxyMiddleware(req, res, next);
     };
 

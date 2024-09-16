@@ -1,44 +1,38 @@
 import type { Request } from "express";
-import type { ClientRequest } from "http";
-import type { ProxyReqCallback } from "http-proxy";
 
-export { createOnProxyReqHandler } from "./onproxyreq-factory";
+import { ProxyReqManager } from "./proxy-req-manager";
 export {
   createPreprocessorMiddleware,
   createEmbeddingsPreprocessorMiddleware,
 } from "./preprocessor-factory";
 
-// Express middleware (runs before http-proxy-middleware, can be async)
-export { addAzureKey } from "./preprocessors/add-azure-key";
+// Preprocessors (runs before request is queued, usually body transformation/validation)
 export { applyQuotaLimits } from "./preprocessors/apply-quota-limits";
+export { blockZoomerOrigins } from "./preprocessors/block-zoomer-origins";
 export { countPromptTokens } from "./preprocessors/count-prompt-tokens";
 export { languageFilter } from "./preprocessors/language-filter";
 export { setApiFormat } from "./preprocessors/set-api-format";
-export { signAwsRequest } from "./preprocessors/sign-aws-request";
-export { signGcpRequest } from "./preprocessors/sign-vertex-ai-request";
 export { transformOutboundPayload } from "./preprocessors/transform-outbound-payload";
 export { validateContextSize } from "./preprocessors/validate-context-size";
+export { validateModelFamily } from "./preprocessors/validate-model-family";
 export { validateVision } from "./preprocessors/validate-vision";
 
-// http-proxy-middleware callbacks (runs on onProxyReq, cannot be async)
-export { addAnthropicPreamble } from "./onproxyreq/add-anthropic-preamble";
-export { addKey, addKeyForEmbeddingsRequest } from "./onproxyreq/add-key";
-export { blockZoomerOrigins } from "./onproxyreq/block-zoomer-origins";
-export { checkModelFamily } from "./onproxyreq/check-model-family";
-export { finalizeBody } from "./onproxyreq/finalize-body";
-export { finalizeSignedRequest } from "./onproxyreq/finalize-signed-request";
-export { stripHeaders } from "./onproxyreq/strip-headers";
+// Proxy request mutators (runs every time request is dequeued, before proxying, usually for auth/signing)
+export { addKey, addKeyForEmbeddingsRequest } from "./mutators/add-key";
+export { addAzureKey } from "./mutators/add-azure-key";
+export { finalizeBody } from "./mutators/finalize-body";
+export { finalizeSignedRequest } from "./mutators/finalize-signed-request";
+export { signAwsRequest } from "./mutators/sign-aws-request";
+export { signGcpRequest } from "./mutators/sign-vertex-ai-request";
+export { stripHeaders } from "./mutators/strip-headers";
 
 /**
- * Middleware that runs prior to the request being handled by http-proxy-
- * middleware.
+ * Middleware that runs prior to the request being queued or handled by
+ * http-proxy-middleware. You will not have access to the proxied
+ * request/response objects since they have not yet been sent to the API.
  *
- * Async functions can be used here, but you will not have access to the proxied
- * request/response objects, nor the data set by ProxyRequestMiddleware
- * functions as they have not yet been run.
- *
- * User will have been authenticated by the time this middleware runs, but your
- * request won't have been assigned an API key yet.
+ * User will have been authenticated by the proxy's gatekeeper, but the request
+ * won't have been assigned an upstream API key yet.
  *
  * Note that these functions only run once ever per request, even if the request
  * is automatically retried by the request queue middleware.
@@ -46,17 +40,14 @@ export { stripHeaders } from "./onproxyreq/strip-headers";
 export type RequestPreprocessor = (req: Request) => void | Promise<void>;
 
 /**
- * Callbacks that run immediately before the request is sent to the API in
- * response to http-proxy-middleware's `proxyReq` event.
+ * Middleware that runs immediately before the request is proxied to the
+ * upstream API, after dequeueing the request from the request queue.
  *
- * Async functions cannot be used here as HPM's event emitter is not async and
- * will not wait for the promise to resolve before sending the request.
- *
- * Note that these functions may be run multiple times per request if the
- * first attempt is rate limited and the request is automatically retried by the
- * request queue middleware.
+ * Because these middleware may be run multiple times per request if a retryable
+ * error occurs and the request put back in the queue, they must be idempotent.
+ * A change manager is provided to allow the middleware to make changes to the
+ * request which can be automatically reverted.
  */
-export type HPMRequestCallback = ProxyReqCallback<ClientRequest, Request>;
-
-export const forceModel = (model: string) => (req: Request) =>
-  void (req.body.model = model);
+export type ProxyReqMutator = (
+  changeManager: ProxyReqManager
+) => void | Promise<void>;

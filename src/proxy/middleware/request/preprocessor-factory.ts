@@ -4,12 +4,15 @@ import { initializeSseStream } from "../../../shared/streaming";
 import { classifyErrorAndSend } from "../common";
 import {
   RequestPreprocessor,
+  blockZoomerOrigins,
   countPromptTokens,
   languageFilter,
   setApiFormat,
   transformOutboundPayload,
   validateContextSize,
+  validateModelFamily,
   validateVision,
+  applyQuotaLimits,
 } from ".";
 
 type RequestPreprocessorOptions = {
@@ -30,14 +33,15 @@ type RequestPreprocessorOptions = {
 /**
  * Returns a middleware function that processes the request body into the given
  * API format, and then sequentially runs the given additional preprocessors.
+ * These should be used for validation and transformations that only need to
+ * happen once per request.
  *
  * These run first in the request lifecycle, a single time per request before it
  * is added to the request queue. They aren't run again if the request is
  * re-attempted after a rate limit.
  *
- * To run a preprocessor on every re-attempt, pass it to createQueueMiddleware.
- * It will run after these preprocessors, but before the request is sent to
- * http-proxy-middleware.
+ * To run functions against requests every time they are re-attempted, write a
+ * ProxyReqMutator and pass it to createQueuedProxyMiddleware instead.
  */
 export const createPreprocessorMiddleware = (
   apiFormat: Parameters<typeof setApiFormat>[0],
@@ -45,6 +49,7 @@ export const createPreprocessorMiddleware = (
 ): RequestHandler => {
   const preprocessors: RequestPreprocessor[] = [
     setApiFormat(apiFormat),
+    blockZoomerOrigins,
     ...(beforeTransform ?? []),
     transformOutboundPayload,
     countPromptTokens,
@@ -52,6 +57,8 @@ export const createPreprocessorMiddleware = (
     ...(afterTransform ?? []),
     validateContextSize,
     validateVision,
+    validateModelFamily,
+    applyQuotaLimits,
   ];
   return async (...args) => executePreprocessors(preprocessors, args);
 };
@@ -83,10 +90,10 @@ async function executePreprocessors(
     next();
   } catch (error) {
     if (error.constructor.name === "ZodError") {
-      const msg = error?.issues
+      const issues = error?.issues
         ?.map((issue: ZodIssue) => `${issue.path.join(".")}: ${issue.message}`)
         .join("; ");
-      req.log.warn({ issues: msg }, "Prompt validation failed.");
+      req.log.warn({ issues }, "Prompt failed preprocessor validation.");
     } else {
       req.log.error(error, "Error while executing request preprocessor");
     }
@@ -152,10 +159,7 @@ function isTestMessage(body: any) {
       messages[0].content === "Hi"
     );
   } else if (contents) {
-    return (
-      contents.length === 1 &&
-      contents[0].parts[0]?.text === "Hi"
-    );
+    return contents.length === 1 && contents[0].parts[0]?.text === "Hi";
   } else {
     return (
       prompt?.trim() === "Human: Hi\n\nAssistant:" ||

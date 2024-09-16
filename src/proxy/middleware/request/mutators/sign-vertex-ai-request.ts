@@ -1,12 +1,16 @@
-import express from "express";
+import { Request } from "express";
 import crypto from "crypto";
-import { keyPool } from "../../../../shared/key-management";
-import { RequestPreprocessor } from "../index";
 import { AnthropicV1MessagesSchema } from "../../../../shared/api-schemas";
+import { keyPool } from "../../../../shared/key-management";
+import { getAxiosInstance } from "../../../../shared/network";
+import { ProxyReqMutator } from "../index";
+
+const axios = getAxiosInstance();
 
 const GCP_HOST = process.env.GCP_HOST || "%REGION%-aiplatform.googleapis.com";
 
-export const signGcpRequest: RequestPreprocessor = async (req) => {
+export const signGcpRequest: ProxyReqMutator = async (manager) => {
+  const req = manager.request;
   const serviceValid = req.service === "gcp";
   if (!serviceValid) {
     throw new Error("addVertexAIKey called on invalid request");
@@ -16,12 +20,11 @@ export const signGcpRequest: RequestPreprocessor = async (req) => {
     throw new Error("You must specify a model with your request.");
   }
 
-  const { model, stream } = req.body;
-  req.key = keyPool.get(model, "gcp");
+  const { model } = req.body;
+  const key = keyPool.get(model, "gcp");
+  manager.setKey(key);
 
-  req.log.info({ key: req.key.hash, model }, "Assigned GCP key to request");
-
-  req.isStreaming = String(stream) === "true";
+  req.log.info({ key: key.hash, model }, "Assigned GCP key to request");
 
   // TODO: This should happen in transform-outbound-payload.ts
   // TODO: Support tools
@@ -39,15 +42,15 @@ export const signGcpRequest: RequestPreprocessor = async (req) => {
     .strip()
     .parse(req.body);
   strippedParams.anthropic_version = "vertex-2023-10-16";
-  
+
   const [accessToken, credential] = await getAccessToken(req);
 
   const host = GCP_HOST.replace("%REGION%", credential.region);
   // GCP doesn't use the anthropic-version header, but we set it to ensure the
   // stream adapter selects the correct transformer.
-  req.headers["anthropic-version"] = "2023-06-01";
+  manager.setHeader("anthropic-version", "2023-06-01");
 
-  req.signedRequest = {
+  manager.setSignedRequest({
     method: "POST",
     protocol: "https:",
     hostname: host,
@@ -58,11 +61,11 @@ export const signGcpRequest: RequestPreprocessor = async (req) => {
       ["authorization"]: `Bearer ${accessToken}`,
     },
     body: JSON.stringify(strippedParams),
-  };
+  });
 };
 
 async function getAccessToken(
-  req: express.Request
+  req: Readonly<Request>
 ): Promise<[string, Credential]> {
   // TODO: access token caching to reduce latency
   const credential = getCredentialParts(req);
@@ -134,19 +137,23 @@ async function exchangeJwtForAccessToken(
     assertion: signedJwt,
   };
 
-  const r = await fetch(authUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: Object.entries(params)
-      .map(([k, v]) => `${k}=${v}`)
-      .join("&"),
-  }).then((res) => res.json());
+  try {
+    const response = await axios.post(authUrl, params, {
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    });
 
-  if (r.access_token) {
-    return [r.access_token, ""];
+    if (response.data.access_token) {
+      return [response.data.access_token, ""];
+    } else {
+      return [null, JSON.stringify(response.data)];
+    }
+  } catch (error) {
+    if ("response" in error && "data" in error.response) {
+      return [null, JSON.stringify(error.response.data)];
+    } else {
+      return [null, "An unexpected error occurred"];
+    }
   }
-
-  return [null, JSON.stringify(r)];
 }
 
 function str2ab(str: string): ArrayBuffer {
@@ -179,7 +186,7 @@ type Credential = {
   privateKey: string;
 };
 
-function getCredentialParts(req: express.Request): Credential {
+function getCredentialParts(req: Readonly<Request>): Credential {
   const [projectId, clientEmail, region, rawPrivateKey] =
     req.key!.key.split(":");
   if (!projectId || !clientEmail || !region || !rawPrivateKey) {

@@ -1,26 +1,18 @@
 import { Request, RequestHandler, Router } from "express";
-import { createProxyMiddleware } from "http-proxy-middleware";
 import { config } from "../config";
 import { AzureOpenAIKey, keyPool, OpenAIKey } from "../shared/key-management";
 import { getOpenAIModelFamily } from "../shared/models";
-import { logger } from "../logger";
-import { createQueueMiddleware } from "./queue";
 import { ipLimiter } from "./rate-limit";
-import { handleProxyError } from "./middleware/common";
 import {
   addKey,
   addKeyForEmbeddingsRequest,
   createEmbeddingsPreprocessorMiddleware,
-  createOnProxyReqHandler,
   createPreprocessorMiddleware,
   finalizeBody,
-  forceModel,
   RequestPreprocessor,
 } from "./middleware/request";
-import {
-  createOnProxyResHandler,
-  ProxyResHandlerWithBody,
-} from "./middleware/response";
+import { ProxyResHandlerWithBody } from "./middleware/response";
+import { createQueuedProxyMiddleware } from "./middleware/request/proxy-middleware-factory";
 
 // https://platform.openai.com/docs/models/overview
 let modelsCache: any = null;
@@ -126,7 +118,6 @@ const openaiResponseHandler: ProxyResHandlerWithBody = async (
   res.status(200).json({ ...newBody, proxy: body.proxy });
 };
 
-/** Only used for non-streaming responses. */
 function transformTurboInstructResponse(
   turboInstructBody: Record<string, any>
 ): Record<string, any> {
@@ -144,31 +135,15 @@ function transformTurboInstructResponse(
   return transformed;
 }
 
-const openaiProxy = createQueueMiddleware({
-  proxyMiddleware: createProxyMiddleware({
-    target: "https://api.openai.com",
-    changeOrigin: true,
-    selfHandleResponse: true,
-    logger,
-    on: {
-      proxyReq: createOnProxyReqHandler({ pipeline: [addKey, finalizeBody] }),
-      proxyRes: createOnProxyResHandler([openaiResponseHandler]),
-      error: handleProxyError,
-    },
-  }),
+const openaiProxy = createQueuedProxyMiddleware({
+  mutations: [addKey, finalizeBody],
+  target: "https://api.openai.com",
+  blockingResponseHandler: openaiResponseHandler,
 });
 
-const openaiEmbeddingsProxy = createProxyMiddleware({
+const openaiEmbeddingsProxy = createQueuedProxyMiddleware({
+  mutations: [addKeyForEmbeddingsRequest, finalizeBody],
   target: "https://api.openai.com",
-  changeOrigin: true,
-  selfHandleResponse: false,
-  logger,
-  on: {
-    proxyReq: createOnProxyReqHandler({
-      pipeline: [addKeyForEmbeddingsRequest, finalizeBody],
-    }),
-    error: handleProxyError,
-  },
 });
 
 const openaiRouter = Router();
@@ -214,6 +189,10 @@ openaiRouter.post(
   createEmbeddingsPreprocessorMiddleware(),
   openaiEmbeddingsProxy
 );
+
+function forceModel(model: string): RequestPreprocessor {
+  return (req: Request) => void (req.body.model = model);
+}
 
 function fixupMaxTokens(req: Request) {
   if (!req.body.max_completion_tokens) {
