@@ -17,9 +17,8 @@ ARG GREETING_URL
 RUN if [ -n "$GREETING_URL" ]; then \
     curl -sL "$GREETING_URL" > greeting.md; \
     fi
-COPY package*.json greeting.md* ./
-RUN npm install
 COPY . .
+RUN npm install
 RUN npm run build
 RUN --mount=type=secret,id=_env,dst=/etc/secrets/.env cat /etc/secrets/.env >> .env
 EXPOSE 10000

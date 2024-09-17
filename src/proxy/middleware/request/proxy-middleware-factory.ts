@@ -8,7 +8,7 @@ import {
   debugProxyErrorsPlugin,
   proxyEventsPlugin,
 } from "http-proxy-middleware";
-import { ProxyReqMutator, RequestPreprocessor } from "./index";
+import { ProxyReqMutator } from "./index";
 import { createOnProxyResHandler, ProxyResHandlerWithBody } from "../response";
 import { createQueueMiddleware } from "../../queue";
 import { getHttpAgents } from "../../../shared/network";

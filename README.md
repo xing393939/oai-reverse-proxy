@@ -8,7 +8,6 @@ Reverse proxy server for various LLM APIs.
 - [Usage Instructions](#usage-instructions)
   - [Self-hosting](#self-hosting)
   - [Huggingface (outdated, not advised)](#huggingface-outdated-not-advised)
-  - [Render (outdated, not advised)](#render-outdated-not-advised)
 - [Local Development](#local-development)
 
 ## What is this?
@@ -43,9 +42,6 @@ If you'd like to run your own instance of this server, you'll need to deploy it 
 
 ### Huggingface (outdated, not advised)
 [See here for instructions on how to deploy to a Huggingface Space.](./docs/deploy-huggingface.md)
-
-### Render (outdated, not advised)
-[See here for instructions on how to deploy to Render.com.](./docs/deploy-render.md)
 
 ## Local Development
 To run the proxy locally for development or testing, install Node.js >= 18.0.0 and follow the steps below.
