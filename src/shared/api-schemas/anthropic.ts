@@ -110,8 +110,6 @@ export const transformOpenAIToAnthropicChat: APIFormatTransformer<
     throw result.error;
   }
 
-  req.headers["anthropic-version"] = "2023-06-01";
-
   const { messages, ...rest } = result.data;
   const { messages: newMessages, system } =
     openAIMessagesToClaudeChatPrompt(messages);
@@ -145,8 +143,6 @@ export const transformOpenAIToAnthropicText: APIFormatTransformer<
     );
     throw result.error;
   }
-
-  req.headers["anthropic-version"] = "2023-06-01";
 
   const { messages, ...rest } = result.data;
   const prompt = openAIMessagesToClaudeTextPrompt(messages);
@@ -191,8 +187,6 @@ export const transformAnthropicTextToAnthropicChat: APIFormatTransformer<
     );
     throw result.error;
   }
-
-  req.headers["anthropic-version"] = "2023-06-01";
 
   const { model, max_tokens_to_sample, prompt, ...rest } = result.data;
   validateAnthropicTextPrompt(prompt);
