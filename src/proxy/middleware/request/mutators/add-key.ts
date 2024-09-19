@@ -70,7 +70,9 @@ export const addKey: ProxyReqMutator = (manager) => {
   switch (assignedKey.service) {
     case "anthropic":
       manager.setHeader("X-API-Key", assignedKey.key);
-      manager.setHeader("anthropic-version", "2023-06-01");
+      if (!manager.request.headers["anthropic-version"]) {
+        manager.setHeader("anthropic-version", "2023-06-01");
+      }
       break;
     case "openai":
       const key: OpenAIKey = assignedKey as OpenAIKey;
