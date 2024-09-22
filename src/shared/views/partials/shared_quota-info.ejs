@@ -1,7 +1,14 @@
 <p>
   Next refresh: <time><%- nextQuotaRefresh %></time>
 </p>
-<table class="striped">
+<%
+const quotaTableId = Math.random().toString(36).slice(2);
+ %>
+<div>
+  <label for="quota-family-filter-<%= quotaTableId %>">Filter:</label>
+  <input type="text" id="quota-family-filter-<%= quotaTableId %>" oninput="filterQuotaTable(this, '<%= quotaTableId %>')" />
+</div>
+<table class="striped" id="quota-table-<%= quotaTableId %>">
   <thead>
     <tr>
       <th scope="col">Model Family</th>
@@ -50,3 +57,18 @@
     <% }) %>
   </tbody>
 </table>
+<script>
+  function filterQuotaTable(input, tableId) {
+    const filter = input.value.toLowerCase();
+    const table = document.getElementById("quota-table-" + tableId);
+    const rows = table.querySelectorAll("tbody tr");
+    for (const row of rows) {
+      const modelFamily = row.querySelector("th").textContent;
+      if (modelFamily.toLowerCase().includes(filter)) {
+        row.style.display = "";
+      } else {
+        row.style.display = "none";
+      }
+    }
+  }
+</script>

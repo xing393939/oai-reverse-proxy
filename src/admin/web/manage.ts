@@ -344,10 +344,11 @@ router.post("/maintenance", (req, res) => {
     case "setDifficulty": {
       const selected = req.body["pow-difficulty"];
       const valid = ["low", "medium", "high", "extreme"];
-      if (!selected || !valid.includes(selected)) {
-        throw new HttpError(400, "Invalid difficulty" + selected);
+      const isNumber = Number.isInteger(Number(selected));
+      if (!selected || !valid.includes(selected) && !isNumber) {
+        throw new HttpError(400, "Invalid difficulty " + selected);
       }
-      config.powDifficultyLevel = selected;
+      config.powDifficultyLevel = isNumber ? Number(selected) : selected;
       invalidatePowChallenges();
       break;
     }

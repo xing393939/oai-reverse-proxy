@@ -30,7 +30,6 @@ self.onmessage = async (event) => {
       nonce = data.nonce;
 
       const c = data.challenge;
-      // decode salt to Uint8Array
       const salt = new Uint8Array(c.s.length / 2);
       for (let i = 0; i < c.s.length; i += 2) {
         salt[i / 2] = parseInt(c.s.slice(i, i + 2), 16);
@@ -99,7 +98,7 @@ const solve = async () => {
       self.postMessage({ type: "solved", nonce: solution.nonce });
       active = false;
     } else {
-      if (Date.now() - lastNotify > 1000) {
+      if (Date.now() - lastNotify >= 500) {
         console.log("Last nonce", nonce, "Hashes", hashesSinceLastNotify);
         self.postMessage({ type: "progress", hashes: hashesSinceLastNotify });
         lastNotify = Date.now();

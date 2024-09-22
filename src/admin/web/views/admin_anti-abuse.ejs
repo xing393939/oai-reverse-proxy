@@ -38,15 +38,20 @@
   <h3>Difficulty Level</h3>
   <div>
     <label for="difficulty">Difficulty Level:</label>
-    <span id="currentDifficulty">Current: <%= difficulty %></span>
-    <select name="difficulty" id="difficulty">
+    <select name="difficulty" id="difficulty" onchange="difficultyChanged(event)">
       <option value="low">Low</option>
       <option value="medium">Medium</option>
       <option value="high">High</option>
       <option value="extreme">Extreme</option>
+      <option value="custom">Custom</option>
     </select>
+    <div id="custom-difficulty-container" style="display: none">
+      <label for="customDifficulty">Hashes required (average):</label>
+      <input type="number" id="customDifficulty" value="0" min="1" max="1000000000" />
+    </div>
     <button onclick='doAction("setDifficulty")'>Update Difficulty</button>
   </div>
+  <div><span id="currentDifficulty">Current Difficulty: <%= difficulty %></span></div>
   <% } %>
   <form id="maintenanceForm" action="/admin/manage/maintenance" method="post">
     <input id="_csrf" type="hidden" name="_csrf" value="<%= csrfToken %>" />
@@ -63,14 +68,14 @@
 <div>
   <h2>IP Whitelists and Blacklists</h2>
   <p>
-    You can specify IP ranges to whitelist or blacklist from accessing the proxy. Note that changes here are not
-    persisted across server restarts. If you want to make changes permanent, you can copy the values to your deployment
-    configuration.
-  </p>
-  <p>
-    Entries can be specified as single addresses or
+    You can specify IP ranges to whitelist or blacklist from accessing the proxy. Entries can be specified as single
+    addresses or
     <a href="https://en.wikipedia.org/wiki/Classless_Inter-Domain_Routing#CIDR_notation">CIDR notation</a>. IPv6 is
     supported but not recommended for use with the current version of the proxy.
+  </p>
+  <p>
+    <strong>Note:</strong> Changes here are not persisted across server restarts. If you want to make changes permanent,
+    you can copy the values to your deployment configuration.
   </p>
   <% for (let i = 0; i < whitelists.length; i++) { %>
   <%- include("partials/admin-cidr-widget", { list: whitelists[i] }) %>
@@ -99,10 +104,25 @@
 </div>
 
 <script>
+  function difficultyChanged(event) {
+    const value = event.target.value;
+    if (value === "custom") {
+      document.getElementById("custom-difficulty-container").style.display = "block";
+    } else {
+      document.getElementById("custom-difficulty-container").style.display = "none";
+    }
+  }
+
   function doAction(action) {
     document.getElementById("hiddenAction").value = action;
     if (action === "setDifficulty") {
-      document.getElementById("hiddenDifficulty").value = document.getElementById("difficulty").value;
+      const selected = document.getElementById("difficulty").value;
+      const hiddenDifficulty = document.getElementById("hiddenDifficulty");
+      if (selected === "custom") {
+        hiddenDifficulty.value = document.getElementById("customDifficulty").value;
+      } else {
+        hiddenDifficulty.value = selected;
+      }
     }
     document.getElementById("maintenanceForm").submit();
   }
