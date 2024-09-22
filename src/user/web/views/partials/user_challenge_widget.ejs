@@ -192,11 +192,11 @@
   let isMobileWebkit = isIOSiPadOSWebKit();
 
   function handleWorkerMessage(e) {
+    if (solution) {
+      return;
+    }
     switch (e.data.type) {
       case "progress":
-        if (solution) {
-          return;
-        }
         totalHashes += e.data.hashes;
         reports++;
         break;
@@ -213,9 +213,6 @@
         document.getElementById("workers").disabled = false;
         break;
       case "solved":
-        if (solution) {
-          return;
-        }
         workers.forEach((w, i) => {
           w.postMessage({ type: "stop" });
           setTimeout(() => w.terminate(), 1000 + i * 100);
@@ -379,9 +376,6 @@
   }
 
   function estimateProgress() {
-    // if (reports % workers.length !== 0) {
-    //   return;
-    // }
     if (Date.now() - lastUpdateTime < 500) {
       return;
     }
@@ -389,12 +383,9 @@
     lastUpdateTime = Date.now();
     const hashRate = totalHashes / elapsedTime;
     const timeRemaining = (workFactor - totalHashes) / hashRate;
-    // const progress = 100 * (1 - Math.exp(-totalHashes / workFactor));
     const p = 1 / workFactor;
     const odds = ((1 - p) ** totalHashes * 100).toFixed(3);
     const progress = 100 - odds;
-
-    // let note = " (" + odds + "% odds of no solution yet)";
 
     document.querySelector("#captcha-progress>.progress").style.width = Math.min(progress, 100) + "%";
     document.getElementById("captcha-progress-text").value = `
