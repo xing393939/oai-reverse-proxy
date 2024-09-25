@@ -107,23 +107,16 @@ function pinoLoggerPlugin(proxyServer: ProxyServer<Request>) {
       "Error occurred while proxying request to target"
     );
   });
-  proxyServer.on("proxyReq", (proxyReq, req, res) => {
-    const originalUrl = req.originalUrl;
-    const targetHost = `${proxyReq.protocol}//${proxyReq.host}`;
-    const targetPath = res.req.url;
+  proxyServer.on("proxyReq", (proxyReq, req) => {
+    const from = req.originalUrl;
     req.log.info(
-      { originalUrl, targetHost, targetPath },
+      { from, to: `${proxyReq.protocol}//${proxyReq.host}${proxyReq.path}` },
       "Sending request to upstream API..."
     );
   });
   proxyServer.on("proxyRes", (proxyRes: ProxiedResponse, req, _res) => {
-    const originalUrl = req.originalUrl;
-    const targetHost = `${proxyRes.req.protocol}//${proxyRes.req.hostname}`;
-    const targetPath = proxyRes.req.path;
+    const target = `${proxyRes.req.protocol}//${proxyRes.req.host}${proxyRes.req.path}`;
     const statusCode = proxyRes.statusCode;
-    req.log.info(
-      { originalUrl, targetHost, targetPath, statusCode },
-      "Got response from upstream API."
-    );
+    req.log.info({ target, statusCode }, "Got response from upstream API.");
   });
 }

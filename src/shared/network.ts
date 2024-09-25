@@ -48,6 +48,7 @@ export function getHttpAgents() {
     process.env.HTTP_PROXY = proxyUrl;
     process.env.HTTPS_PROXY = proxyUrl;
     process.env.WS_PROXY = proxyUrl;
+    process.env.WSS_PROXY = proxyUrl;
     httpAgent = new ProxyAgent();
     httpsAgent = httpAgent; // ProxyAgent automatically handles HTTPS
     const proxy = proxyUrl.replace(/:.*@/, "@******");

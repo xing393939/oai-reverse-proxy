@@ -105,8 +105,8 @@ function transformGoogleAIResponse(
 const googleAIProxy = createQueuedProxyMiddleware({
   target: ({ signedRequest }) => {
     if (!signedRequest) throw new Error("Must sign request before proxying");
-    const { protocol, hostname, path } = signedRequest;
-    return `${protocol}//${hostname}${path}`;
+    const { protocol, hostname} = signedRequest;
+    return `${protocol}//${hostname}`;
   },
   mutations: [addGoogleAIKey, finalizeSignedRequest],
   blockingResponseHandler: googleAIBlockingResponseHandler,
@@ -120,11 +120,7 @@ googleAIRouter.post(
   "/v1beta/models/:modelId:(generateContent|streamGenerateContent)",
   ipLimiter,
   createPreprocessorMiddleware(
-    {
-      inApi: "google-ai",
-      outApi: "google-ai",
-      service: "google-ai",
-    },
+    { inApi: "google-ai", outApi: "google-ai", service: "google-ai" },
     { beforeTransform: [maybeReassignModel], afterTransform: [setStreamFlag] }
   ),
   googleAIProxy
