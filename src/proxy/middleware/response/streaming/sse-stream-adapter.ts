@@ -20,7 +20,6 @@ type SSEStreamAdapterOptions = TransformOptions & {
  */
 export class SSEStreamAdapter extends Transform {
   private readonly isAwsStream;
-  private readonly isGoogleStream;
   private api: APIFormat;
   private partialMessage = "";
   private textDecoder = new TextDecoder("utf8");
@@ -30,7 +29,6 @@ export class SSEStreamAdapter extends Transform {
     super({ ...options, objectMode: true });
     this.isAwsStream =
       options?.contentType === "application/vnd.amazon.eventstream";
-    this.isGoogleStream = options?.api === "google-ai";
     this.api = options.api;
     this.log = options.logger.child({ module: "sse-stream-adapter" });
   }
@@ -143,10 +141,6 @@ export class SSEStreamAdapter extends Transform {
       if (this.isAwsStream) {
         // `data` is a Message object
         const message = this.processAwsMessage(data);
-        if (message) this.push(message + "\n\n");
-      } else if (this.isGoogleStream) {
-        // `data` is an element from the Google AI JSON stream
-        const message = this.processGoogleObject(data);
         if (message) this.push(message + "\n\n");
       } else {
         // `data` is a string, but possibly only a partial message

@@ -1,3 +1,4 @@
+import { Request, Response } from "express";
 import util from "util";
 import zlib from "zlib";
 import { sendProxyError } from "../common";
@@ -7,13 +8,13 @@ const DECODER_MAP = {
   gzip: util.promisify(zlib.gunzip),
   deflate: util.promisify(zlib.inflate),
   br: util.promisify(zlib.brotliDecompress),
+  text: (data: Buffer) => data,
 };
+type SupportedContentEncoding = keyof typeof DECODER_MAP;
 
 const isSupportedContentEncoding = (
-  contentEncoding: string
-): contentEncoding is keyof typeof DECODER_MAP => {
-  return contentEncoding in DECODER_MAP;
-};
+  encoding: string
+): encoding is SupportedContentEncoding => encoding in DECODER_MAP;
 
 /**
  * Handles the response from the upstream service and decodes the body if
@@ -35,41 +36,39 @@ export const handleBlockingResponse: RawResponseBodyHandler = async (
     throw err;
   }
 
-  return new Promise<string>((resolve, reject) => {
+  return new Promise((resolve, reject) => {
     let chunks: Buffer[] = [];
     proxyRes.on("data", (chunk) => chunks.push(chunk));
     proxyRes.on("end", async () => {
-      let body = Buffer.concat(chunks);
+      let body: string | Buffer = Buffer.concat(chunks);
+      const rejectWithMessage = function (msg: string, err: Error) {
+        const error = `${msg} (${err.message})`;
+        req.log.warn({ stack: err.stack }, error);
+        sendProxyError(req, res, 500, "Internal Server Error", { error });
+        return reject(error);
+      };
 
-      const contentEncoding = proxyRes.headers["content-encoding"];
-      if (contentEncoding) {
-        if (isSupportedContentEncoding(contentEncoding)) {
-          const decoder = DECODER_MAP[contentEncoding];
-          // @ts-ignore - started failing after upgrading TypeScript, don't care
-          // as it was never a problem.
-          body = await decoder(body);
-        } else {
-          const error = `Proxy received response with unsupported content-encoding: ${contentEncoding}`;
-          req.log.warn({ contentEncoding, key: req.key?.hash }, error);
-          sendProxyError(req, res, 500, "Internal Server Error", {
-            error,
-            contentEncoding,
-          });
-          return reject(error);
+      const contentEncoding = proxyRes.headers["content-encoding"] ?? "text";
+      if (isSupportedContentEncoding(contentEncoding)) {
+        try {
+          body = (await DECODER_MAP[contentEncoding](body)).toString();
+        } catch (e) {
+          return rejectWithMessage(`Could not decode response body`, e);
         }
+      } else {
+        return rejectWithMessage(
+          "API responded with unsupported content encoding",
+          new Error(`Unsupported content-encoding: ${contentEncoding}`)
+        );
       }
 
       try {
         if (proxyRes.headers["content-type"]?.includes("application/json")) {
-          const json = JSON.parse(body.toString());
-          return resolve(json);
+          return resolve(JSON.parse(body));
         }
-        return resolve(body.toString());
+        return resolve(body);
       } catch (e) {
-        const msg = `Proxy received response with invalid JSON: ${e.message}`;
-        req.log.warn({ error: e.stack, key: req.key?.hash }, msg);
-        sendProxyError(req, res, 500, "Internal Server Error", { error: msg });
-        return reject(msg);
+        return rejectWithMessage("API responded with invalid JSON", e);
       }
     });
   });

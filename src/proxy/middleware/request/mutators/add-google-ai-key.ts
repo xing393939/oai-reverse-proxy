@@ -1,17 +1,17 @@
 import { keyPool } from "../../../../shared/key-management";
-import { ProxyReqMutator} from "../index";
+import { ProxyReqMutator } from "../index";
 
 export const addGoogleAIKey: ProxyReqMutator = (manager) => {
   const req = manager.request;
   const inboundValid =
     req.inboundApi === "openai" || req.inboundApi === "google-ai";
   const outboundValid = req.outboundApi === "google-ai";
-  
+
   const serviceValid = req.service === "google-ai";
   if (!inboundValid || !outboundValid || !serviceValid) {
     throw new Error("addGoogleAIKey called on invalid request");
   }
-  
+
   const model = req.body.model;
   const key = keyPool.get(model, "google-ai");
   manager.setKey(key);
@@ -20,7 +20,7 @@ export const addGoogleAIKey: ProxyReqMutator = (manager) => {
     { key: key.hash, model, stream: req.isStreaming },
     "Assigned Google AI API key to request"
   );
-  
+
   // https://generativelanguage.googleapis.com/v1beta/models/$MODEL_ID:generateContent?key=$API_KEY
   // https://generativelanguage.googleapis.com/v1beta/models/$MODEL_ID:streamGenerateContent?key=${API_KEY}
   const payload = { ...req.body, stream: undefined, model: undefined };
@@ -33,8 +33,8 @@ export const addGoogleAIKey: ProxyReqMutator = (manager) => {
     protocol: "https:",
     hostname: "generativelanguage.googleapis.com",
     path: `/v1beta/models/${model}:${
-      req.isStreaming ? "streamGenerateContent" : "generateContent"
-    }?key=${key.key}`,
+      req.isStreaming ? "streamGenerateContent?alt=sse&" : "generateContent?"
+    }key=${key.key}`,
     headers: {
       ["host"]: `generativelanguage.googleapis.com`,
       ["content-type"]: "application/json",

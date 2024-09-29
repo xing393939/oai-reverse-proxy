@@ -174,11 +174,11 @@ function getDecoder(options: {
   logger: typeof logger;
   contentType?: string;
 }) {
-  const { api, contentType, input, logger } = options;
+  const { contentType, input, logger } = options;
   if (contentType?.includes("application/vnd.amazon.eventstream")) {
     return getAwsEventStreamDecoder({ input, logger });
-  } else if (api === "google-ai") {
-    return StreamArray.withParser();
+  } else if (contentType?.includes("application/json")) {
+    throw new Error("JSON streaming not supported, request SSE instead");
   } else {
     // Passthrough stream, but ensures split chunks across multi-byte characters
     // are handled correctly.

@@ -100,23 +100,30 @@ export function createQueuedProxyMiddleware({
 type ProxiedResponse = http.IncomingMessage & Response & any;
 function pinoLoggerPlugin(proxyServer: ProxyServer<Request>) {
   proxyServer.on("error", (err, req, res, target) => {
-    const originalUrl = req.originalUrl;
-    const targetUrl = target?.toString();
     req.log.error(
-      { originalUrl, targetUrl, err },
+      { originalUrl: req.originalUrl, targetUrl: String(target), err },
       "Error occurred while proxying request to target"
     );
   });
   proxyServer.on("proxyReq", (proxyReq, req) => {
-    const from = req.originalUrl;
+    const { protocol, host, path } = proxyReq;
     req.log.info(
-      { from, to: `${proxyReq.protocol}//${proxyReq.host}${proxyReq.path}` },
+      {
+        from: req.originalUrl,
+        to: `${protocol}//${host}${path}`,
+      },
       "Sending request to upstream API..."
     );
   });
   proxyServer.on("proxyRes", (proxyRes: ProxiedResponse, req, _res) => {
-    const target = `${proxyRes.req.protocol}//${proxyRes.req.host}${proxyRes.req.path}`;
-    const statusCode = proxyRes.statusCode;
-    req.log.info({ target, statusCode }, "Got response from upstream API.");
+    const { protocol, host, path } = proxyRes.req;
+    req.log.info(
+      {
+        target: `${protocol}//${host}${path}`,
+        status: proxyRes.statusCode,
+        contentType: proxyRes.headers["content-type"],
+      },
+      "Got response from upstream API."
+    );
   });
 }

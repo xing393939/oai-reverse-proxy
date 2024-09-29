@@ -149,7 +149,7 @@ function setStreamFlag(req: Request) {
 }
 
 /**
- * Replaces requests for non-Google AI models with gemini-pro-1.5-latest.
+ * Replaces requests for non-Google AI models with gemini-1.5-pro-latest.
  * Also strips models/ from the beginning of the model IDs.
  **/
 function maybeReassignModel(req: Request) {
@@ -169,8 +169,8 @@ function maybeReassignModel(req: Request) {
     return;
   }
 
-  req.log.info({ requested }, "Reassigning model to gemini-pro-1.5-latest");
-  req.body.model = "gemini-pro-1.5-latest";
+  req.log.info({ requested }, "Reassigning model to gemini-1.5-pro-latest");
+  req.body.model = "gemini-1.5-pro-latest";
 }
 
 export const googleAI = googleAIRouter;
