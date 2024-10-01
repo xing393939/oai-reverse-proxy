@@ -68,6 +68,14 @@ export class AzureOpenAIKeyChecker extends KeyCheckerBase<AzureOpenAIKey> {
           });
         case "429":
           const headers = error.response.headers;
+          const retryAfter = Number(headers["retry-after"] || 0);
+          if (retryAfter > 3600) {
+            this.log.warn(
+              { key: key.hash, errorType, error: error.response.data, headers },
+              "Key has an excessive rate limit and will be disabled."
+            );
+            return this.updateKey(key.hash, { isDisabled: true });
+          }
           this.log.warn(
             { key: key.hash, errorType, error: error.response.data, headers },
             "Key is rate limited. Rechecking key in 1 minute."

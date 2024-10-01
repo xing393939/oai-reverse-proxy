@@ -43,8 +43,8 @@ const azureOpenaiResponseHandler: ProxyResHandlerWithBody = async (
 const azureOpenAIProxy = createQueuedProxyMiddleware({
   target: ({ signedRequest }) => {
     if (!signedRequest) throw new Error("Must sign request before proxying");
-    const { hostname, path } = signedRequest;
-    return `https://${hostname}${path}`;
+    const { hostname, protocol } = signedRequest;
+    return `${protocol}//${hostname}`;
   },
   mutations: [addAzureKey, finalizeSignedRequest],
   blockingResponseHandler: azureOpenaiResponseHandler,
