@@ -37,6 +37,10 @@ export const GoogleAIV1GenerateContentSchema = z
     tools: z.array(z.object({})).max(0).optional(),
     safetySettings: SafetySettingsSchema,
     systemInstruction: GoogleAIV1ContentSchema.optional(),
+    // quick fix for SillyTavern, which uses camel case field names for everything
+    // except for system_instruction where it randomly uses snake case.
+    // google api evidently accepts either case.
+    "system_instruction": GoogleAIV1ContentSchema.optional(),
     generationConfig: z
       .object({
         temperature: z.number().min(0).max(2).optional(),
