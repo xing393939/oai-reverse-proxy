@@ -5,8 +5,8 @@ import { ProxyReqMutator } from "../index";
  * privacy reasons.
  */
 export const stripHeaders: ProxyReqMutator = (manager) => {
-  manager.setHeader("origin", "");
-  manager.setHeader("referer", "");
+  manager.removeHeader("origin");
+  manager.removeHeader("referer");
 
   // Some APIs refuse requests coming from browsers to discourage embedding
   // API keys in client-side code, so we must remove all CORS/fetch headers.
