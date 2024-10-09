@@ -8,7 +8,7 @@ import {
   debugProxyErrorsPlugin,
   proxyEventsPlugin,
 } from "http-proxy-middleware";
-import { ProxyReqMutator } from "./index";
+import { ProxyReqMutator, stripHeaders } from "./index";
 import { createOnProxyResHandler, ProxyResHandlerWithBody } from "../response";
 import { createQueueMiddleware } from "../../queue";
 import { getHttpAgents } from "../../../shared/network";
@@ -94,7 +94,10 @@ export function createQueuedProxyMiddleware({
     }) as any,
   });
 
-  return createQueueMiddleware({ mutations, proxyMiddleware });
+  return createQueueMiddleware({
+    mutations: [stripHeaders, ...(mutations ?? [])],
+    proxyMiddleware,
+  });
 }
 
 type ProxiedResponse = http.IncomingMessage & Response & any;
