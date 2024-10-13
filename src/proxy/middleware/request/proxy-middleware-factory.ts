@@ -125,6 +125,9 @@ function pinoLoggerPlugin(proxyServer: ProxyServer<Request>) {
         target: `${protocol}//${host}${path}`,
         status: proxyRes.statusCode,
         contentType: proxyRes.headers["content-type"],
+        contentEncoding: proxyRes.headers["content-encoding"],
+        contentLength: proxyRes.headers["content-length"],
+        transferEncoding: proxyRes.headers["transfer-encoding"],
       },
       "Got response from upstream API."
     );

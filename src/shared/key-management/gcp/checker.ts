@@ -1,9 +1,9 @@
 import { AxiosError } from "axios";
-import crypto from "crypto";
 import { GcpModelFamily } from "../../models";
 import { getAxiosInstance } from "../../network";
 import { KeyCheckerBase } from "../key-checker-base";
 import type { GcpKey, GcpKeyProvider } from "./provider";
+import { getCredentialsFromGcpKey, refreshGcpAccessToken } from "./oauth";
 
 const axios = getAxiosInstance();
 
@@ -37,6 +37,7 @@ export class GcpKeyChecker extends KeyCheckerBase<GcpKey> {
     let checks: Promise<boolean>[] = [];
     const isInitialCheck = !key.lastChecked;
     if (isInitialCheck) {
+      await this.maybeRefreshAccessToken(key);
       checks = [
         this.invokeModel("claude-3-haiku@20240307", key, true),
         this.invokeModel("claude-3-sonnet@20240229", key, true),
@@ -70,6 +71,7 @@ export class GcpKeyChecker extends KeyCheckerBase<GcpKey> {
         modelFamilies: families,
       });
     } else {
+      await this.maybeRefreshAccessToken(key);
       if (key.haikuEnabled) {
         await this.invokeModel("claude-3-haiku@20240307", key, false);
       } else if (key.sonnetEnabled) {
@@ -85,10 +87,7 @@ export class GcpKeyChecker extends KeyCheckerBase<GcpKey> {
     }
 
     this.log.info(
-      {
-        key: key.hash,
-        families: key.modelFamilies,
-      },
+      { key: key.hash, families: key.modelFamilies },
       "Checked key."
     );
   }
@@ -129,26 +128,36 @@ export class GcpKeyChecker extends KeyCheckerBase<GcpKey> {
     this.updateKey(key.hash, { lastChecked: next });
   }
 
+  private async maybeRefreshAccessToken(key: GcpKey) {
+    if (key.accessToken && key.accessTokenExpiresAt >= Date.now()) {
+      return;
+    }
+
+    this.log.info({ key: key.hash }, "Refreshing GCP access token...");
+    const [token, durationSec] = await refreshGcpAccessToken(key);
+    this.updateKey(key.hash, {
+      accessToken: token,
+      accessTokenExpiresAt: Date.now() + durationSec * 1000 * 0.95,
+    });
+  }
+
   /**
    * Attempt to invoke the given model with the given key.  Returns true if the
    * key has access to the model, false if it does not. Throws an error if the
    * key is disabled.
    */
   private async invokeModel(model: string, key: GcpKey, initial: boolean) {
-    const creds = GcpKeyChecker.getCredentialsFromKey(key);
-    const signedJWT = await GcpKeyChecker.createSignedJWT(
-      creds.clientEmail,
-      creds.privateKey
-    );
-    const [accessToken, jwtError] =
-      await GcpKeyChecker.exchangeJwtForAccessToken(signedJWT);
-    if (accessToken === null) {
-      this.log.warn(
-        { key: key.hash, jwtError },
-        "Unable to get the access token"
+    const creds = await getCredentialsFromGcpKey(key);
+    try {
+      await this.maybeRefreshAccessToken(key);
+    } catch (e) {
+      this.log.error(
+        { key: key.hash, error: e.message },
+        "Could not test key due to error while getting access token."
       );
       return false;
     }
+
     const payload = {
       max_tokens: 1,
       messages: TEST_MESSAGES,
@@ -158,7 +167,7 @@ export class GcpKeyChecker extends KeyCheckerBase<GcpKey> {
       POST_STREAM_RAW_URL(creds.projectId, creds.region, model),
       payload,
       {
-        headers: GcpKeyChecker.getRequestHeaders(accessToken),
+        headers: GcpKeyChecker.getRequestHeaders(key.accessToken),
         validateStatus: initial
           ? () => true
           : (status: number) => status >= 200 && status < 300,
@@ -184,114 +193,10 @@ export class GcpKeyChecker extends KeyCheckerBase<GcpKey> {
     }
   }
 
-  static async createSignedJWT(email: string, pkey: string): Promise<string> {
-    let cryptoKey = await crypto.subtle.importKey(
-      "pkcs8",
-      GcpKeyChecker.str2ab(atob(pkey)),
-      { name: "RSASSA-PKCS1-v1_5", hash: { name: "SHA-256" } },
-      false,
-      ["sign"]
-    );
-
-    const authUrl = "https://www.googleapis.com/oauth2/v4/token";
-    const issued = Math.floor(Date.now() / 1000);
-    const expires = issued + 600;
-
-    const header = { alg: "RS256", typ: "JWT" };
-
-    const payload = {
-      iss: email,
-      aud: authUrl,
-      iat: issued,
-      exp: expires,
-      scope: "https://www.googleapis.com/auth/cloud-platform",
-    };
-
-    const encodedHeader = GcpKeyChecker.urlSafeBase64Encode(
-      JSON.stringify(header)
-    );
-    const encodedPayload = GcpKeyChecker.urlSafeBase64Encode(
-      JSON.stringify(payload)
-    );
-
-    const unsignedToken = `${encodedHeader}.${encodedPayload}`;
-
-    const signature = await crypto.subtle.sign(
-      "RSASSA-PKCS1-v1_5",
-      cryptoKey,
-      GcpKeyChecker.str2ab(unsignedToken)
-    );
-
-    const encodedSignature = GcpKeyChecker.urlSafeBase64Encode(signature);
-    return `${unsignedToken}.${encodedSignature}`;
-  }
-
-  static async exchangeJwtForAccessToken(
-    signed_jwt: string
-  ): Promise<[string | null, string]> {
-    const auth_url = "https://www.googleapis.com/oauth2/v4/token";
-    const params = {
-      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-      assertion: signed_jwt,
-    };
-
-    const r = await fetch(auth_url, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: Object.entries(params)
-        .map(([k, v]) => `${k}=${v}`)
-        .join("&"),
-    }).then((res) => res.json());
-
-    if (r.access_token) {
-      return [r.access_token, ""];
-    }
-
-    return [null, JSON.stringify(r)];
-  }
-
-  static str2ab(str: string): ArrayBuffer {
-    const buffer = new ArrayBuffer(str.length);
-    const bufferView = new Uint8Array(buffer);
-    for (let i = 0; i < str.length; i++) {
-      bufferView[i] = str.charCodeAt(i);
-    }
-    return buffer;
-  }
-
-  static urlSafeBase64Encode(data: string | ArrayBuffer): string {
-    let base64: string;
-    if (typeof data === "string") {
-      base64 = btoa(
-        encodeURIComponent(data).replace(/%([0-9A-F]{2})/g, (match, p1) =>
-          String.fromCharCode(parseInt("0x" + p1, 16))
-        )
-      );
-    } else {
-      base64 = btoa(String.fromCharCode(...new Uint8Array(data)));
-    }
-    return base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-  }
-
   static getRequestHeaders(accessToken: string) {
     return {
       Authorization: `Bearer ${accessToken}`,
       "Content-Type": "application/json",
     };
-  }
-
-  static getCredentialsFromKey(key: GcpKey) {
-    const [projectId, clientEmail, region, rawPrivateKey] = key.key.split(":");
-    if (!projectId || !clientEmail || !region || !rawPrivateKey) {
-      throw new Error("Invalid GCP key");
-    }
-    const privateKey = rawPrivateKey
-      .replace(
-        /-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\r|\n|\\n/g,
-        ""
-      )
-      .trim();
-
-    return { projectId, clientEmail, region, privateKey };
   }
 }

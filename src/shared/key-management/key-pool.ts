@@ -8,13 +8,13 @@ import { LLMService, MODEL_FAMILY_SERVICE, ModelFamily } from "../models";
 import { Key, KeyProvider } from "./index";
 import { AnthropicKeyProvider, AnthropicKeyUpdate } from "./anthropic/provider";
 import { OpenAIKeyProvider, OpenAIKeyUpdate } from "./openai/provider";
-import { GoogleAIKeyProvider } from "./google-ai/provider";
+import { GoogleAIKeyProvider  } from "./google-ai/provider";
 import { AwsBedrockKeyProvider } from "./aws/provider";
-import { GcpKeyProvider } from "./gcp/provider";
+import { GcpKeyProvider, GcpKey } from "./gcp/provider";
 import { AzureOpenAIKeyProvider } from "./azure/provider";
 import { MistralAIKeyProvider } from "./mistral-ai/provider";
 
-type AllowedPartial = OpenAIKeyUpdate | AnthropicKeyUpdate;
+type AllowedPartial = OpenAIKeyUpdate | AnthropicKeyUpdate | Partial<GcpKey>;
 
 export class KeyPool {
   private keyProviders: KeyProvider[] = [];

@@ -1,11 +1,8 @@
-import { Request } from "express";
-import crypto from "crypto";
 import { AnthropicV1MessagesSchema } from "../../../../shared/api-schemas";
-import { keyPool } from "../../../../shared/key-management";
-import { getAxiosInstance } from "../../../../shared/network";
+import { GcpKey, keyPool } from "../../../../shared/key-management";
 import { ProxyReqMutator } from "../index";
-
-const axios = getAxiosInstance();
+import { getCredentialsFromGcpKey, refreshGcpAccessToken } from "../../../../shared/key-management/gcp/oauth";
+import { credential } from "firebase-admin";
 
 const GCP_HOST = process.env.GCP_HOST || "%REGION%-aiplatform.googleapis.com";
 
@@ -21,8 +18,17 @@ export const signGcpRequest: ProxyReqMutator = async (manager) => {
   }
 
   const { model } = req.body;
-  const key = keyPool.get(model, "gcp");
+  const key: GcpKey = keyPool.get(model, "gcp") as GcpKey;
   manager.setKey(key);
+
+  if (!key.accessToken || Date.now() > key.accessTokenExpiresAt) {
+    const [token, durationSec] = await refreshGcpAccessToken(key);
+    keyPool.update(key, {
+      accessToken: token,
+      accessTokenExpiresAt: Date.now() + durationSec * 1000 * 0.95,
+    } as GcpKey);
+  }
+
 
   req.log.info({ key: key.hash, model }, "Assigned GCP key to request");
 
@@ -43,7 +49,7 @@ export const signGcpRequest: ProxyReqMutator = async (manager) => {
     .parse(req.body);
   strippedParams.anthropic_version = "vertex-2023-10-16";
 
-  const [accessToken, credential] = await getAccessToken(req);
+  const credential = await getCredentialsFromGcpKey(key);
 
   const host = GCP_HOST.replace("%REGION%", credential.region);
   // GCP doesn't use the anthropic-version header, but we set it to ensure the
@@ -58,151 +64,8 @@ export const signGcpRequest: ProxyReqMutator = async (manager) => {
     headers: {
       ["host"]: host,
       ["content-type"]: "application/json",
-      ["authorization"]: `Bearer ${accessToken}`,
+      ["authorization"]: `Bearer ${key.accessToken}`,
     },
     body: JSON.stringify(strippedParams),
   });
 };
-
-async function getAccessToken(
-  req: Readonly<Request>
-): Promise<[string, Credential]> {
-  // TODO: access token caching to reduce latency
-  const credential = getCredentialParts(req);
-  const signedJWT = await createSignedJWT(
-    credential.clientEmail,
-    credential.privateKey
-  );
-  const [accessToken, jwtError] = await exchangeJwtForAccessToken(signedJWT);
-  if (accessToken === null) {
-    req.log.warn(
-      { key: req.key!.hash, jwtError },
-      "Unable to get the access token"
-    );
-    throw new Error("The access token is invalid.");
-  }
-  return [accessToken, credential];
-}
-
-async function createSignedJWT(email: string, pkey: string): Promise<string> {
-  let cryptoKey = await crypto.subtle.importKey(
-    "pkcs8",
-    str2ab(atob(pkey)),
-    {
-      name: "RSASSA-PKCS1-v1_5",
-      hash: { name: "SHA-256" },
-    },
-    false,
-    ["sign"]
-  );
-
-  const authUrl = "https://www.googleapis.com/oauth2/v4/token";
-  const issued = Math.floor(Date.now() / 1000);
-  const expires = issued + 600;
-
-  const header = {
-    alg: "RS256",
-    typ: "JWT",
-  };
-
-  const payload = {
-    iss: email,
-    aud: authUrl,
-    iat: issued,
-    exp: expires,
-    scope: "https://www.googleapis.com/auth/cloud-platform",
-  };
-
-  const encodedHeader = urlSafeBase64Encode(JSON.stringify(header));
-  const encodedPayload = urlSafeBase64Encode(JSON.stringify(payload));
-
-  const unsignedToken = `${encodedHeader}.${encodedPayload}`;
-
-  const signature = await crypto.subtle.sign(
-    "RSASSA-PKCS1-v1_5",
-    cryptoKey,
-    str2ab(unsignedToken)
-  );
-
-  const encodedSignature = urlSafeBase64Encode(signature);
-  return `${unsignedToken}.${encodedSignature}`;
-}
-
-async function exchangeJwtForAccessToken(
-  signedJwt: string
-): Promise<[string | null, string]> {
-  const authUrl = "https://www.googleapis.com/oauth2/v4/token";
-  const params = {
-    grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-    assertion: signedJwt,
-  };
-
-  try {
-    const response = await axios.post(authUrl, params, {
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    });
-
-    if (response.data.access_token) {
-      return [response.data.access_token, ""];
-    } else {
-      return [null, JSON.stringify(response.data)];
-    }
-  } catch (error) {
-    if ("response" in error && "data" in error.response) {
-      return [null, JSON.stringify(error.response.data)];
-    } else {
-      return [null, "An unexpected error occurred"];
-    }
-  }
-}
-
-function str2ab(str: string): ArrayBuffer {
-  const buffer = new ArrayBuffer(str.length);
-  const bufferView = new Uint8Array(buffer);
-  for (let i = 0; i < str.length; i++) {
-    bufferView[i] = str.charCodeAt(i);
-  }
-  return buffer;
-}
-
-function urlSafeBase64Encode(data: string | ArrayBuffer): string {
-  let base64: string;
-  if (typeof data === "string") {
-    base64 = btoa(
-      encodeURIComponent(data).replace(/%([0-9A-F]{2})/g, (match, p1) =>
-        String.fromCharCode(parseInt("0x" + p1, 16))
-      )
-    );
-  } else {
-    base64 = btoa(String.fromCharCode(...new Uint8Array(data)));
-  }
-  return base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-
-type Credential = {
-  projectId: string;
-  clientEmail: string;
-  region: string;
-  privateKey: string;
-};
-
-function getCredentialParts(req: Readonly<Request>): Credential {
-  const [projectId, clientEmail, region, rawPrivateKey] =
-    req.key!.key.split(":");
-  if (!projectId || !clientEmail || !region || !rawPrivateKey) {
-    req.log.error(
-      { key: req.key!.hash },
-      "GCP_CREDENTIALS isn't correctly formatted; refer to the docs"
-    );
-    throw new Error("The key assigned to this request is invalid.");
-  }
-
-  const privateKey = rawPrivateKey
-    .replace(
-      /-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\r|\n|\\n/g,
-      ""
-    )
-    .trim();
-
-  return { projectId, clientEmail, region, privateKey };
-}

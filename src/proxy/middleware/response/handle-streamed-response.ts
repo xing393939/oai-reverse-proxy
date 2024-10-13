@@ -1,6 +1,5 @@
 import express from "express";
 import { pipeline, Readable, Transform } from "stream";
-import StreamArray from "stream-json/streamers/StreamArray";
 import { StringDecoder } from "string_decoder";
 import { promisify } from "util";
 import type { logger } from "../../../logger";
@@ -18,6 +17,7 @@ import { getAwsEventStreamDecoder } from "./streaming/aws-event-stream-decoder";
 import { EventAggregator } from "./streaming/event-aggregator";
 import { SSEMessageTransformer } from "./streaming/sse-message-transformer";
 import { SSEStreamAdapter } from "./streaming/sse-stream-adapter";
+import { getStreamDecompressor } from "./compression";
 
 const pipelineAsync = promisify(pipeline);
 
@@ -41,21 +41,21 @@ export const handleStreamedResponse: RawResponseBodyHandler = async (
   req,
   res
 ) => {
-  const { hash } = req.key!;
+  const { headers, statusCode } = proxyRes;
   if (!req.isStreaming) {
     throw new Error("handleStreamedResponse called for non-streaming request.");
   }
 
-  if (proxyRes.statusCode! > 201) {
+  if (statusCode! > 201) {
     req.isStreaming = false;
     req.log.warn(
-      { statusCode: proxyRes.statusCode, key: hash },
+      { statusCode },
       `Streaming request returned error status code. Falling back to non-streaming response handler.`
     );
     return handleBlockingResponse(proxyRes, req, res);
   }
 
-  req.log.debug({ headers: proxyRes.headers }, `Starting to proxy SSE stream.`);
+  req.log.debug({ headers }, `Starting to proxy SSE stream.`);
 
   // Typically, streaming will have already been initialized by the request
   // queue to send heartbeat pings.
@@ -66,7 +66,7 @@ export const handleStreamedResponse: RawResponseBodyHandler = async (
 
   const prefersNativeEvents = req.inboundApi === req.outboundApi;
   const streamOptions = {
-    contentType: proxyRes.headers["content-type"],
+    contentType: headers["content-type"],
     api: req.outboundApi,
     logger: req.log,
   };
@@ -78,11 +78,10 @@ export const handleStreamedResponse: RawResponseBodyHandler = async (
   // only have to write one aggregator (OpenAI input) for each output format.
   const aggregator = new EventAggregator(req);
 
-  // Decoder reads from the raw response buffer and produces a stream of
-  // discrete events in some format (text/event-stream, vnd.amazon.event-stream,
-  // streaming JSON, etc).
+  const decompressor = getStreamDecompressor(headers["content-encoding"]);
+  // Decoder reads from the response bytes to produce a stream of plaintext.
   const decoder = getDecoder({ ...streamOptions, input: proxyRes });
-  // Adapter consumes the decoded events and produces server-sent events so we
+  // Adapter consumes the decoded text and produces server-sent events so we
   // have a standard event format for the client and to translate between API
   // message formats.
   const adapter = new SSEStreamAdapter(streamOptions);
@@ -107,7 +106,7 @@ export const handleStreamedResponse: RawResponseBodyHandler = async (
   try {
     await Promise.race([
       handleAbortedStream(req, res),
-      pipelineAsync(proxyRes, decoder, adapter, transformer),
+      pipelineAsync(proxyRes, decompressor, decoder, adapter, transformer),
     ]);
     req.log.debug(`Finished proxying SSE stream.`);
     res.end();
@@ -180,8 +179,7 @@ function getDecoder(options: {
   } else if (contentType?.includes("application/json")) {
     throw new Error("JSON streaming not supported, request SSE instead");
   } else {
-    // Passthrough stream, but ensures split chunks across multi-byte characters
-    // are handled correctly.
+    // Ensures split chunks across multi-byte characters are handled correctly.
     const stringDecoder = new StringDecoder("utf8");
     return new Transform({
       readableObjectMode: true,

@@ -2,7 +2,6 @@ import pino from "pino";
 import { Transform, TransformOptions } from "stream";
 import { Message } from "@smithy/eventstream-codec";
 import { APIFormat } from "../../../../shared/key-management";
-import { buildSpoofedSSE } from "../error-generator";
 import { BadRequestError, RetryableError } from "../../../../shared/errors";
 
 type SSEStreamAdapterOptions = TransformOptions & {
@@ -106,34 +105,6 @@ export class SSEStreamAdapter extends Transform {
         this.log.error({ message }, "Received very bad AWS stream event");
         return null;
     }
-  }
-
-  /** Processes an incoming array element from the Google AI JSON stream. */
-  protected processGoogleObject(data: any): string | null {
-    // Sometimes data has fields key and value, sometimes it's just the
-    // candidates array.
-    const candidates = data.value?.candidates ?? data.candidates ?? [{}];
-    try {
-      const hasParts = candidates[0].content?.parts?.length > 0;
-      if (hasParts) {
-        return `data: ${JSON.stringify(data.value ?? data)}`;
-      } else {
-        this.log.error({ event: data }, "Received bad Google AI event");
-        return `data: ${buildSpoofedSSE({
-          format: "google-ai",
-          title: "Proxy stream error",
-          message:
-            "The proxy received malformed or unexpected data from Google AI while streaming.",
-          obj: data,
-          reqId: "proxy-sse-adapter-message",
-          model: "",
-        })}`;
-      }
-    } catch (error) {
-      error.lastEvent = data;
-      this.emit("error", error);
-    }
-    return null;
   }
 
   _transform(data: any, _enc: string, callback: (err?: Error | null) => void) {
