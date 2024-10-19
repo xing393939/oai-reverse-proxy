@@ -75,6 +75,14 @@ export class KeyPool {
     }
   }
 
+  /**
+   * Updates a key in the keypool with the given properties.
+   *
+   * Be aware that the `key` argument may not be the same object instance as the
+   * one in the keypool (such as if it is a clone received via `KeyPool.get` in
+   * which case you are responsible for updating your clone with the new
+   * properties.
+   */
   public update(key: Key, props: AllowedPartial): void {
     const service = this.getKeyProvider(key.service);
     service.update(key.hash, props);
