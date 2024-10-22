@@ -28,6 +28,7 @@ const getModelsResponse = () => {
     "claude-3-sonnet@20240229",
     "claude-3-opus@20240229",
     "claude-3-5-sonnet@20240620",
+    "claude-3-5-sonnet-v2@20241022"
   ];
 
   const models = variants.map((id) => ({
