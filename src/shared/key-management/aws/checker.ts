@@ -304,7 +304,7 @@ See https://docs.aws.amazon.com/bedrock/latest/userguide/cross-region-inference-
     // is being rate limited. I think if a key does not have access to the
     // model, it cannot receive a 429 response, so this should be a success.
     if (status === 429) {
-      if (errorType.match(/ThrosttlingException/i)) {
+      if (errorType.match(/ThrottlingException/i)) {
         this.log.debug(
           { key: key.hash, model, errorType, data, status, headers },
           "Model is available but key is rate limited."
