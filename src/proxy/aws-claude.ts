@@ -187,7 +187,7 @@ function maybeReassignModel(req: Request) {
     throw new Error(`Provided model name (${model}) doesn't resemble a Claude model ID.`);
   }
 
-  const [_, _cl, instant, _v, major, _sep, minor, _ctx, name, rev] = match;
+  const [_, _cl, instant, _v, major, _sep, minor, _ctx, rawName, rev] = match;
 
   if (instant) {
     req.body.model = "anthropic.claude-instant-v1";
@@ -195,6 +195,8 @@ function maybeReassignModel(req: Request) {
   }
 
   const ver = minor ? `${major}.${minor}` : major;
+  const name = rawName.match(/([a-z]+)/)?.[1];
+
   switch (ver) {
     case "1":
     case "1.0":
@@ -220,6 +222,7 @@ function maybeReassignModel(req: Request) {
           return;
       }
       break;
+    case "3-5":
     case "3.5":
       switch (name) {
         case "sonnet":
