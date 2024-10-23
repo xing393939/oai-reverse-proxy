@@ -40,8 +40,6 @@ This project allows you to run a reverse proxy server for various LLM APIs.
   - [x] IP blacklists
   - [x] Proof-of-work challenge for access by anonymous users
 
----
-
 ## Usage Instructions
 If you'd like to run your own instance of this server, you'll need to deploy it somewhere and configure it with your API keys. A few easy options are provided below, though you can also deploy it to any other service you'd like if you know what you're doing and the service supports Node.js.
 
