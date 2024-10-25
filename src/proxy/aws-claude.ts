@@ -206,6 +206,9 @@ function maybeReassignModel(req: Request) {
     case "2.0":
       req.body.model = "anthropic.claude-v2";
       return;
+    case "2.1":
+      req.body.model = "anthropic.claude-v2:1";
+      return;
     case "3":
     case "3.0":
       // there is only one snapshot for all Claude 3 models so there is no need
