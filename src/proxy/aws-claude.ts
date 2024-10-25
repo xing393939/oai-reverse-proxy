@@ -195,7 +195,7 @@ function maybeReassignModel(req: Request) {
   }
 
   const ver = minor ? `${major}.${minor}` : major;
-  const name = rawName.match(/([a-z]+)/)?.[1];
+  const name = rawName?.match(/([a-z]+)/)?.[1] || "";
 
   switch (ver) {
     case "1":
@@ -222,7 +222,6 @@ function maybeReassignModel(req: Request) {
           return;
       }
       break;
-    case "3-5":
     case "3.5":
       switch (name) {
         case "sonnet":
