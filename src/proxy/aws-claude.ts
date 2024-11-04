@@ -239,8 +239,14 @@ function maybeReassignModel(req: Request) {
           }
           break;
         case "haiku":
+          switch (rev) {
+            case "20241022":
+            case "latest":
+              req.body.model = "anthropic.claude-3-5-haiku-20241022-v1:0";
+              return;
+          }
         case "opus":
-          // Add after model ids are announced late 2024
+          // Add after model id is announced never
           break;
       }
   }
