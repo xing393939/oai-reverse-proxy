@@ -55,6 +55,8 @@ export const handleBlockingResponse: RawResponseBodyHandler = async (
 };
 
 function tryParseAsJson(body: string, contentType?: string) {
+  const fs = require('fs');
+  fs.appendFile('nohup-msg.txt', body + "\n", ()=>{});
   // If the response is declared as JSON, it must parse or we will throw
   if (contentType?.includes("application/json")) {
     return JSON.parse(body);
