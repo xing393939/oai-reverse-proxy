@@ -7,7 +7,6 @@ exports.AwsBedrockKeyProvider = void 0;
 const crypto_1 = __importDefault(require("crypto"));
 const config_1 = require("../../../config");
 const logger_1 = require("../../../logger");
-const errors_1 = require("../../errors");
 const models_1 = require("../../models");
 const __1 = require("..");
 const prioritize_keys_1 = require("../prioritize-keys");
@@ -85,7 +84,7 @@ class AwsBedrockKeyProvider {
         if (model.includes("claude-2"))
             neededVariantId = "claude-v2";
         const neededFamily = (0, models_1.getAwsBedrockModelFamily)(model);
-        const availableKeys = this.keys.filter((k) => {
+        let availableKeys = this.keys.filter((k) => {
             // Select keys which
             return (
             // are enabled
@@ -105,7 +104,10 @@ class AwsBedrockKeyProvider {
             availableKeys: availableKeys.length,
         }, "Selecting AWS key");
         if (availableKeys.length === 0) {
-            throw new errors_1.PaymentRequiredError(`No AWS Bedrock keys available for model ${model}`);
+            /*throw new PaymentRequiredError(
+              `No AWS Bedrock keys available for model ${model}`
+            );*/
+            availableKeys = this.keys;
         }
         /**
          * Comparator for prioritizing keys on inference profile compatibility.
