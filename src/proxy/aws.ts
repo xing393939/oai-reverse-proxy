@@ -37,6 +37,7 @@ function handleModelsRequest(req: Request, res: Response) {
 
   // https://docs.aws.amazon.com/bedrock/latest/userguide/model-ids.html
   const models = [
+    "us.anthropic.claude-3-5-sonnet-20241022-v2:0",
     "anthropic.claude-v2",
     "anthropic.claude-v2:1",
     "anthropic.claude-3-haiku-20240307-v1:0",
