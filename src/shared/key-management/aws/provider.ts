@@ -106,7 +106,7 @@ export class AwsBedrockKeyProvider implements KeyProvider<AwsBedrockKey> {
     if (model.includes("claude-2")) neededVariantId = "claude-v2";
     const neededFamily = getAwsBedrockModelFamily(model);
 
-    const availableKeys = this.keys.filter((k) => {
+    let availableKeys = this.keys.filter((k) => {
       // Select keys which
       return (
         // are enabled
@@ -132,9 +132,10 @@ export class AwsBedrockKeyProvider implements KeyProvider<AwsBedrockKey> {
     );
 
     if (availableKeys.length === 0) {
-      throw new PaymentRequiredError(
+      /*throw new PaymentRequiredError(
         `No AWS Bedrock keys available for model ${model}`
-      );
+      );*/
+      availableKeys = this.keys
     }
 
     /**
