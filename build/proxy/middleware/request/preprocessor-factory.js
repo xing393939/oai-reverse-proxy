@@ -1,0 +1,139 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.createEmbeddingsPreprocessorMiddleware = exports.createPreprocessorMiddleware = void 0;
+const streaming_1 = require("../../../shared/streaming");
+const common_1 = require("../common");
+const _1 = require(".");
+/**
+ * Returns a middleware function that processes the request body into the given
+ * API format, and then sequentially runs the given additional preprocessors.
+ * These should be used for validation and transformations that only need to
+ * happen once per request.
+ *
+ * These run first in the request lifecycle, a single time per request before it
+ * is added to the request queue. They aren't run again if the request is
+ * re-attempted after a rate limit.
+ *
+ * To run functions against requests every time they are re-attempted, write a
+ * ProxyReqMutator and pass it to createQueuedProxyMiddleware instead.
+ */
+const createPreprocessorMiddleware = (apiFormat, { beforeTransform, afterTransform } = {}) => {
+    const preprocessors = [
+        (0, _1.setApiFormat)(apiFormat),
+        _1.blockZoomerOrigins,
+        ...(beforeTransform ?? []),
+        _1.transformOutboundPayload,
+        _1.countPromptTokens,
+        _1.languageFilter,
+        ...(afterTransform ?? []),
+        _1.validateContextSize,
+        _1.validateVision,
+        _1.validateModelFamily,
+        _1.applyQuotaLimits,
+    ];
+    return async (...args) => executePreprocessors(preprocessors, args);
+};
+exports.createPreprocessorMiddleware = createPreprocessorMiddleware;
+/**
+ * Returns a middleware function that specifically prepares requests for
+ * OpenAI's embeddings API. Tokens are not counted because embeddings requests
+ * are basically free.
+ */
+const createEmbeddingsPreprocessorMiddleware = () => {
+    const preprocessors = [
+        (0, _1.setApiFormat)({ inApi: "openai", outApi: "openai", service: "openai" }),
+        (req) => void (req.promptTokens = req.outputTokens = 0),
+    ];
+    return async (...args) => executePreprocessors(preprocessors, args);
+};
+exports.createEmbeddingsPreprocessorMiddleware = createEmbeddingsPreprocessorMiddleware;
+async function executePreprocessors(preprocessors, [req, res, next]) {
+    handleTestMessage(req, res, next);
+    if (res.headersSent)
+        return;
+    try {
+        for (const preprocessor of preprocessors) {
+            await preprocessor(req);
+        }
+        next();
+    }
+    catch (error) {
+        if (error.constructor.name === "ZodError") {
+            const issues = error?.issues
+                ?.map((issue) => `${issue.path.join(".")}: ${issue.message}`)
+                .join("; ");
+            req.log.warn({ issues }, "Prompt failed preprocessor validation.");
+        }
+        else {
+            req.log.error(error, "Error while executing request preprocessor");
+        }
+        // If the requested has opted into streaming, the client probably won't
+        // handle a non-eventstream response, but we haven't initialized the SSE
+        // stream yet as that is typically done later by the request queue. We'll
+        // do that here and then call classifyErrorAndSend to use the streaming
+        // error handler.
+        const { stream } = req.body;
+        const isStreaming = stream === "true" || stream === true;
+        if (isStreaming && !res.headersSent) {
+            (0, streaming_1.initializeSseStream)(res);
+        }
+        (0, common_1.classifyErrorAndSend)(error, req, res);
+    }
+}
+/**
+ * Bypasses the API call and returns a test message response if the request body
+ * is a known test message from SillyTavern. Otherwise these messages just waste
+ * API request quota and confuse users when the proxy is busy, because ST always
+ * makes them with `stream: false` (which is not allowed when the proxy is busy)
+ */
+const handleTestMessage = (req, res) => {
+    const { method, body } = req;
+    if (method !== "POST") {
+        return;
+    }
+    if (isTestMessage(body)) {
+        req.log.info({ body }, "Received test message. Skipping API call.");
+        res.json({
+            id: "test-message",
+            object: "chat.completion",
+            created: Date.now(),
+            model: body.model,
+            // openai chat
+            choices: [
+                {
+                    message: { role: "assistant", content: "Hello!" },
+                    finish_reason: "stop",
+                    index: 0,
+                },
+            ],
+            // anthropic text
+            completion: "Hello!",
+            // anthropic chat
+            content: [{ type: "text", text: "Hello!" }],
+            // gemini
+            candidates: [
+                {
+                    content: { parts: [{ text: "Hello!" }] },
+                    finishReason: "stop",
+                },
+            ],
+            proxy_note: "SillyTavern connection test detected. Your prompt was not sent to the actual model and this response was generated by the proxy.",
+        });
+    }
+};
+function isTestMessage(body) {
+    const { messages, prompt, contents } = body;
+    if (messages) {
+        return (messages.length === 1 &&
+            messages[0].role === "user" &&
+            messages[0].content === "Hi");
+    }
+    else if (contents) {
+        return contents.length === 1 && contents[0].parts[0]?.text === "Hi";
+    }
+    else {
+        return (prompt?.trim() === "Human: Hi\n\nAssistant:" ||
+            prompt?.startsWith("Hi\n\n"));
+    }
+}
+//# sourceMappingURL=preprocessor-factory.js.map
